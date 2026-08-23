@@ -19,6 +19,9 @@ import { AnnouncementsModule } from './announcements/announcements.module';
 import { AdminModule } from './admin/admin.module';
 import { MediaModule } from './media/media.module';
 import { LiveSessionsModule } from './live-sessions/live-sessions.module';
+import { HealthModule } from './health/health.module';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { RequestLoggingInterceptor } from './middlewares/request-logging.interceptor';
 
 @Module({
   imports: [
@@ -49,8 +52,11 @@ import { LiveSessionsModule } from './live-sessions/live-sessions.module';
     AdminModule,
     MediaModule,
     LiveSessionsModule,
+    HealthModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [
+    { provide: APP_INTERCEPTOR, useClass: RequestLoggingInterceptor },
+  ],
 })
 export class AppModule {}

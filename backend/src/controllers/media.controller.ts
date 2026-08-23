@@ -17,6 +17,7 @@ export class MediaController {
 
   // ─── POST /api/media/upload — Нэг файл байршуулах ────────────────────────────
   @Post('upload')
+  @Roles(Role.TEACHER, Role.MANAGER, Role.ADMIN)
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(
     @UploadedFile() file: Express.Multer.File,
@@ -30,6 +31,7 @@ export class MediaController {
 
   // ─── POST /api/media/upload/multi — Олон файл нэгэн зэрэг байршуулах ────────
   @Post('upload/multi')
+  @Roles(Role.TEACHER, Role.MANAGER, Role.ADMIN)
   @UseInterceptors(FilesInterceptor('files', 10))
   async uploadMultiple(
     @UploadedFiles() files: Express.Multer.File[],
@@ -46,14 +48,16 @@ export class MediaController {
   async getPresigned(
     @Param('key') key: string,
     @Query('expiry') expiry?: string,
+    @Request() req?: any,
   ) {
-    const expirySeconds = expiry ? parseInt(expiry) : 3600;
-    const url = await this.mediaService.getPresignedUrl(key, expirySeconds);
+    const expirySeconds = Math.min(expiry ? parseInt(expiry) : 900, 3600);
+    const url = await this.mediaService.getAuthorizedPresignedUrl(key, req.user.id, req.user.roles, expirySeconds);
     return { presignedUrl: url, expiresInSeconds: expirySeconds };
   }
 
   // ─── GET /api/media/list — Медиа файлын жагсаалт (lesson/course-аар шүүх) ───
   @Get('list')
+  @Roles(Role.TEACHER, Role.MANAGER, Role.ADMIN)
   async listAssets(
     @Query('courseId')   courseId?:   string,
     @Query('lessonId')   lessonId?:   string,

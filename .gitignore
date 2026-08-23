@@ -51,6 +51,8 @@ coverage
 postgres_data/
 redis_data/
 minio_data/
+backups/
+backend/backups/
 
 # Next.js telemetry & cache
 .next

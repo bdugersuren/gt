@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { LiveSessionStatus } from '@prisma/client';
+import { LiveSessionStatus, Role } from '@prisma/client';
 
 @Injectable()
 export class LiveSessionsService {
@@ -52,7 +52,8 @@ export class LiveSessionsService {
   }
 
   // Get all sessions for a course
-  async getSessionsByCourse(courseId: string) {
+  async getSessionsByCourse(courseId: string, userId: string, roles: Role[]) {
+    await this.assertCourseMember(courseId, userId, roles);
     return this.prisma.liveSession.findMany({
       where: { courseId },
       include: {
@@ -82,7 +83,7 @@ export class LiveSessionsService {
   }
 
   // Find a session by PIN code (for students to join)
-  async findByCode(sessionCode: string) {
+  async findByCode(sessionCode: string, userId: string, roles: Role[]) {
     const session = await this.prisma.liveSession.findUnique({
       where: { sessionCode },
       include: {
@@ -92,6 +93,7 @@ export class LiveSessionsService {
       },
     });
     if (!session) throw new NotFoundException('Буруу PIN код — хичээл олдсонгүй');
+    await this.assertCourseMember(session.courseId, userId, roles);
     if (session.status === 'ENDED') throw new BadRequestException('Энэ live хичээл аль хэдийн дууссан байна');
     return session;
   }
@@ -143,6 +145,7 @@ export class LiveSessionsService {
   async joinSession(sessionCode: string, studentId: string) {
     const session = await this.prisma.liveSession.findUnique({ where: { sessionCode } });
     if (!session) throw new NotFoundException('Буруу PIN код');
+    await this.assertCourseMember(session.courseId, studentId, [Role.STUDENT]);
     if (session.status !== 'LIVE') {
       throw new BadRequestException(
         session.status === 'SCHEDULED'
@@ -224,5 +227,32 @@ export class LiveSessionsService {
     });
 
     return { pollId, question: poll.question, totalVotes, results };
+  }
+
+  private async assertCourseMember(courseId: string, userId: string, roles: Role[]) {
+    if (roles.includes(Role.ADMIN) || roles.includes(Role.MANAGER)) return;
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { classGroupId: true } });
+    const allowed = await this.prisma.course.count({
+      where: {
+        id: courseId,
+        OR: [
+          { teachers: { some: { id: userId } } },
+          {
+            enrollments: {
+              some: {
+                isActive: true,
+                startDate: { lte: new Date() },
+                endDate: { gte: new Date() },
+                OR: [
+                  { studentId: userId },
+                  ...(user?.classGroupId ? [{ classGroupId: user.classGroupId }] : []),
+                ],
+              },
+            },
+          },
+        ],
+      },
+    });
+    if (!allowed) throw new ForbiddenException('Энэ курст live хичээлд хандах эрхгүй байна');
   }
 }

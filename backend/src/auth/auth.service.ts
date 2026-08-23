@@ -52,7 +52,7 @@ export class AuthService {
   }
 
   async register(data: any) {
-    const { username, email, password, fullName, registerNumber, code, role } = data;
+    const { username, email, password, fullName, registerNumber, code } = data;
 
     const existingUser = await this.prisma.user.findFirst({
       where: {
@@ -78,7 +78,8 @@ export class AuthService {
         fullName,
         registerNumber,
         code,
-        roles: role ? [role] : ['STUDENT'],
+        // Public registration must never be able to grant privileged roles.
+        roles: ['STUDENT'],
       },
     });
 
@@ -90,20 +91,12 @@ export class AuthService {
       where: { email },
     });
 
-    if (!user) {
-      throw new UnauthorizedException('Уг имэйл хаягаар бүртгэлтэй хэрэглэгч олдсонгүй');
-    }
-
-    const tempPasswordHash = await bcrypt.hash('Reset@123', 10);
-
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { passwordHash: tempPasswordHash },
-    });
-
+    // Do not disclose whether the account exists and never assign a shared
+    // temporary password. Token delivery is intentionally disabled until an
+    // email provider and persistent, single-use reset-token store are configured.
     return {
       success: true,
-      message: 'Таны нууц үг сэргээх хүсэлт амжилттай. Туршилтын горимд таны нууц үг түр зуур "Reset@123" болж шинэчлэгдлээ.',
+      message: 'Хэрэв уг имэйл бүртгэлтэй бол нууц үг сэргээх заавар илгээгдэнэ.',
     };
   }
 }

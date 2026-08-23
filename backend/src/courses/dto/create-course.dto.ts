@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsBoolean, IsOptional, Length } from 'class-validator';
+import { IsNotEmpty, IsString, IsBoolean, IsOptional, IsUUID, Length } from 'class-validator';
 
 export class CreateCourseDto {
   @IsString()
@@ -24,9 +24,11 @@ export class CreateCourseDto {
 
   @IsString()
   @IsNotEmpty({ message: 'Тэнхимийн ID хоосон байж болохгүй' })
+  @IsUUID('4', { message: 'Тэнхимийн ID UUID форматтай байх ёстой' })
   departmentId!: string;
 
   @IsString()
   @IsNotEmpty({ message: 'Багшийн ID хоосон байж болохгүй' })
+  @IsUUID('4', { message: 'Багшийн ID UUID форматтай байх ёстой' })
   teacherId!: string;
 }

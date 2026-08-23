@@ -12,7 +12,10 @@ import { LiveSessionsService } from './live-sessions.service';
 import { JwtService } from '@nestjs/jwt';
 
 @WebSocketGateway({
-  cors: { origin: '*' },
+  cors: {
+    origin: (process.env.CORS_ORIGINS || 'http://localhost:3001').split(',').map((value) => value.trim()),
+    credentials: true,
+  },
   namespace: '/live',
 })
 export class LiveSessionsGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -37,6 +40,7 @@ export class LiveSessionsGateway implements OnGatewayConnection, OnGatewayDiscon
         client.disconnect();
         return;
       }
+      if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET is required');
       const payload = this.jwtService.verify(token, { secret: process.env.JWT_SECRET });
       (client as any).user = payload;
     } catch {
@@ -62,7 +66,7 @@ export class LiveSessionsGateway implements OnGatewayConnection, OnGatewayDiscon
     if (!user) return;
 
     try {
-      const session = await this.liveSessionsService.findByCode(data.sessionCode);
+      const session = await this.liveSessionsService.findByCode(data.sessionCode, user.sub, user.roles || []);
 
       // Register student as attendee
       if (!user.roles?.includes('TEACHER') && !user.roles?.includes('MANAGER')) {

@@ -1,0 +1,15 @@
+services:
+  postgres_backup:
+    profiles: [backup]
+    image: postgres:16.15-alpine
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:?}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?}
+      PGDATABASE: ${POSTGRES_DB:?}
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backup
+      - ./ops/backup:/ops:ro
+    entrypoint: ["/bin/sh", "/ops/postgres-backup.sh"]
+    networks: [backend]
+

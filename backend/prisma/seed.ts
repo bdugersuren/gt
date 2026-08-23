@@ -4,14 +4,22 @@ import * as bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Production seed is disabled');
+  }
   console.log('Seeding database with TVET VET & ELE pilot run data...');
 
   // 1. Hash passwords
-  const adminPasswordHash = await bcrypt.hash('Admin@123', 10);
-  const managerPasswordHash = await bcrypt.hash('Manager@123', 10);
-  const teacherPasswordHash = await bcrypt.hash('Teacher@123', 10);
-  const mentorPasswordHash = await bcrypt.hash('Mentor@123', 10);
-  const studentPasswordHash = await bcrypt.hash('Student@123', 10);
+  const requireSeedPassword = (name: string) => {
+    const value = process.env[name];
+    if (!value || value.length < 12) throw new Error(`${name} must be set and at least 12 characters`);
+    return value;
+  };
+  const adminPasswordHash = await bcrypt.hash(requireSeedPassword('SEED_ADMIN_PASSWORD'), 10);
+  const managerPasswordHash = await bcrypt.hash(requireSeedPassword('SEED_MANAGER_PASSWORD'), 10);
+  const teacherPasswordHash = await bcrypt.hash(requireSeedPassword('SEED_TEACHER_PASSWORD'), 10);
+  const mentorPasswordHash = await bcrypt.hash(requireSeedPassword('SEED_MENTOR_PASSWORD'), 10);
+  const studentPasswordHash = await bcrypt.hash(requireSeedPassword('SEED_STUDENT_PASSWORD'), 10);
 
   // 2. Create Departments
   const deptAgr = await prisma.department.upsert({

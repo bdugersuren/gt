@@ -11,6 +11,10 @@ const connection = new IORedis(process.env.REDIS_URL || 'redis://redis:6379', {
   maxRetriesPerRequest: null,
 });
 
+const callbackUrl = process.env.BACKEND_CALLBACK_URL || 'http://backend:5000/api/videos/transcode-callback';
+const callbackToken = process.env.TRANSCODER_SHARED_SECRET;
+if (!callbackToken) throw new Error('TRANSCODER_SHARED_SECRET is required');
+
 // Connect to MinIO instance
 const minioClient = new Minio.Client({
   endPoint: process.env.MINIO_ENDPOINT || 'minio',
@@ -101,12 +105,11 @@ const worker = new Worker(
 
       // 5. Send Callback request to NestJS backend API inside lms-net
       console.log(`[Job ${job.id}] Sending callback to NestJS backend...`);
-      const callbackUrl = 'http://backend:5000/api/videos/transcode-callback';
       const response = await fetch(callbackUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-transcoder-token': 'pk_transcoder_shared_secret_key', // Internal verification header
+          'x-transcoder-token': callbackToken,
         },
         body: JSON.stringify({
           success: true,
@@ -128,12 +131,11 @@ const worker = new Worker(
       
       // Notify backend of failure
       try {
-        const callbackUrl = 'http://backend:5000/api/videos/transcode-callback';
         await fetch(callbackUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-transcoder-token': 'pk_transcoder_shared_secret_key',
+            'x-transcoder-token': callbackToken,
           },
           body: JSON.stringify({
             success: false,
@@ -173,3 +175,13 @@ worker.on('completed', (job) => {
 worker.on('failed', (job, err) => {
   console.error(`[Job ${job?.id}] Failed with error:`, err);
 });
+
+async function shutdown(signal: string) {
+  console.log(`Received ${signal}; closing worker`);
+  await worker.close();
+  await connection.quit();
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));

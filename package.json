@@ -1,6 +1,14 @@
 {
   "name": "pk-lms-monorepo",
   "private": true,
+  "scripts": {
+    "typecheck": "pnpm --filter pk-backend exec tsc --noEmit && pnpm --filter pk-frontend exec tsc --noEmit && pnpm --filter pk-transcoder-worker exec tsc --noEmit",
+    "build": "pnpm --filter pk-backend build && pnpm --filter pk-frontend build && pnpm --filter pk-transcoder-worker build",
+    "compose:check": "docker compose config --quiet",
+    "backup:postgres": "docker compose -f docker-compose.yml -f docker-compose.backup.yml --profile backup run --rm postgres_backup",
+    "staging:verify": "ops/staging/verify.sh",
+    "deploy:preflight": "ops/deploy/preflight.sh"
+  },
   "dependencies": {
     "axios": "^1.19.0"
   }

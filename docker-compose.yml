@@ -1,130 +1,183 @@
+name: gt-lms
 
+x-logging: &default-logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "5" }
+x-security: &default-security
+  security_opt: ["no-new-privileges:true"]
 
 services:
-  # 1. Frontend Application (Next.js SSR + PWA)
-  # Connected to both shared-net (for host proxy) and lms-net (for internal APIs)
   frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    container_name: pk_frontend
-    restart: always
+    <<: *default-security
+    image: ${FRONTEND_IMAGE:-gt-lms-frontend}:${IMAGE_TAG:-local}
+    build: { context: ., dockerfile: frontend/Dockerfile }
+    restart: unless-stopped
     environment:
       NODE_ENV: production
       PORT: 3000
-      NEXT_PUBLIC_APP_URL: https://gurvantamir.know.mn
-      NEXT_PUBLIC_API_URL: https://gurvantamir.know.mn/api
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?}
       INTERNAL_API_URL: http://backend:5000
-    ports:
-      - "3001:3000"
-    networks:
-      - shared-net
-      - lms-net
+    expose: ["3000"]
+    networks: [edge, backend]
     depends_on:
-      - backend
+      backend: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    mem_limit: 512m
+    mem_reservation: 256m
+    cpus: 1.0
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    logging: *default-logging
 
-  # 2. Backend API Service (Node.js/NestJS + Prisma)
   backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    container_name: pk_backend
-    restart: always
-    depends_on:
-      - postgres
-      - redis
-      - minio
+    <<: *default-security
+    image: ${BACKEND_IMAGE:-gt-lms-backend}:${IMAGE_TAG:-local}
+    build: { context: ., dockerfile: backend/Dockerfile }
+    restart: unless-stopped
     environment:
       NODE_ENV: production
       PORT: 5000
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:?}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD:?}@redis:6379
       MINIO_ENDPOINT: minio
       MINIO_PORT: "9000"
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
-      PUBLIC_APP_URL: https://gurvantamir.know.mn
-    expose:
-      - "5000"
-    networks:
-      - lms-net
-
-  # 3. FFmpeg Video Transcoder Worker (BullMQ Consumer)
-  transcoder_worker:
-    build:
-      context: .
-      dockerfile: workers/transcoder/Dockerfile
-    container_name: pk_transcoder
-    restart: always
+      MINIO_USE_SSL: "false"
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?}
+      MINIO_PUBLIC_BASE_URL: ${MINIO_PUBLIC_BASE_URL:-https://gurvantamir.know.mn/media}
+      JWT_SECRET: ${JWT_SECRET:?}
+      TRANSCODER_SHARED_SECRET: ${TRANSCODER_SHARED_SECRET:?}
+      CORS_ORIGINS: ${CORS_ORIGINS:?}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:?}
+    expose: ["5000"]
+    networks: [backend]
     depends_on:
-      - redis
-      - minio
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    mem_limit: 512m
+    mem_reservation: 256m
+    cpus: 1.0
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    logging: *default-logging
+
+  transcoder_worker:
+    <<: *default-security
+    profiles: [media]
+    image: ${TRANSCODER_IMAGE:-gt-lms-transcoder}:${IMAGE_TAG:-local}
+    build: { context: ., dockerfile: workers/transcoder/Dockerfile }
+    restart: unless-stopped
     environment:
-      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+      REDIS_URL: redis://:${REDIS_PASSWORD:?}@redis:6379
       MINIO_ENDPOINT: minio
       MINIO_PORT: "9000"
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
-    networks:
-      - lms-net
+      MINIO_USE_SSL: "false"
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?}
+      BACKEND_CALLBACK_URL: http://backend:5000/api/videos/transcode-callback
+      TRANSCODER_SHARED_SECRET: ${TRANSCODER_SHARED_SECRET:?}
+    networks: [backend]
+    depends_on:
+      backend: { condition: service_healthy }
+    mem_limit: 2g
+    mem_reservation: 512m
+    cpus: 2.0
+    read_only: true
+    tmpfs: ["/tmp:size=1g,mode=1777"]
+    logging: *default-logging
 
-  # 4. Relational Database (Isolated internal network)
   postgres:
-    image: postgres:16-alpine
-    container_name: pk_postgres
-    restart: always
+    <<: *default-security
+    image: postgres:16.15-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    expose:
-      - "5432"
-    networks:
-      - lms-net
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: ${POSTGRES_DB:?}
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    shm_size: 256m
+    mem_limit: 1g
+    mem_reservation: 256m
+    cpus: 1.0
+    logging: *default-logging
 
-  # 5. Redis Cache & Job Broker (Isolated internal network)
   redis:
-    image: redis:7-alpine
-    container_name: pk_redis
-    restart: always
-    volumes:
-      - redis_data:/data
-    expose:
-      - "6379"
-    networks:
-      - lms-net
+    <<: *default-security
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?}", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    environment: { REDIS_PASSWORD: "${REDIS_PASSWORD:?}" }
+    volumes: ["redis_data:/data"]
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD --no-auth-warning ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 320m
+    mem_reservation: 64m
+    cpus: 0.5
+    logging: *default-logging
 
-  # 6. Object Storage Service (MinIO S3 - Isolated internal network)
   minio:
+    <<: *default-security
+    # Kept pinned until the scanner error is repaired and an upgrade is tested in staging.
     image: minio/minio:RELEASE.2024-01-28T22-35-53Z
-    container_name: pk_minio
-    restart: always
+    restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    volumes:
-      - minio_data:/data
-    expose:
-      - "9000"
-      - "9001"
-    networks:
-      - lms-net
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+    volumes: ["minio_data:/data"]
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpus: 1.0
+    logging: *default-logging
+
+  migrate:
+    profiles: [ops]
+    image: ${BACKEND_IMAGE:-gt-lms-backend}:${IMAGE_TAG:-local}
+    command: ["backend/node_modules/.bin/prisma", "migrate", "deploy", "--schema", "backend/prisma/schema.prisma"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:?}?schema=public
+    networks: [backend]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
 
 networks:
-  # Internal network isolated for LMS micro-services and DB
-  lms-net:
-    driver: bridge
-    name: pk_lms_net
-
-  # External network shared with the host reverse proxy (Nginx / Traefik)
-  shared-net:
-    external: true
+  backend: { internal: true }
+  edge:
     name: shared-net
-
+    external: true
 volumes:
   postgres_data:
   redis_data:

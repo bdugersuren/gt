@@ -15,7 +15,9 @@ RUN apk add --no-cache ffmpeg
 WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
 COPY workers/transcoder/package.json ./workers/transcoder/
-COPY --from=builder /app/workers/transcoder/dist ./workers/transcoder/dist
-COPY --from=builder /app/node_modules ./node_modules
+COPY --chown=node:node --from=builder /app/workers/transcoder/dist ./workers/transcoder/dist
+COPY --chown=node:node --from=builder /app/workers/transcoder/node_modules ./workers/transcoder/node_modules
+COPY --chown=node:node --from=builder /app/node_modules ./node_modules
 
+USER node
 CMD ["node", "workers/transcoder/dist/worker.js"]

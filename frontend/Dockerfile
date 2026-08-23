@@ -11,13 +11,14 @@ RUN pnpm --filter=pk-frontend build
 # Stage 2: Runtime
 FROM node:20-alpine
 WORKDIR /app
-ENV NODE_ENV production
-ENV PORT 3000
-ENV HOSTNAME "0.0.0.0"
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 
-COPY --from=builder /app/frontend/public ./public
-COPY --from=builder /app/frontend/.next/standalone ./
-COPY --from=builder /app/frontend/.next/static ./frontend/.next/static
+COPY --chown=node:node --from=builder /app/frontend/public ./frontend/public
+COPY --chown=node:node --from=builder /app/frontend/.next/standalone ./
+COPY --chown=node:node --from=builder /app/frontend/.next/static ./frontend/.next/static
 
 EXPOSE 3000
-CMD ["node", "server.js"]
+USER node
+CMD ["node", "frontend/server.js"]

@@ -18,7 +18,7 @@ export class VideosService {
     this.minioClient = new Minio.Client({
       endPoint: process.env.MINIO_ENDPOINT || 'minio',
       port: parseInt(process.env.MINIO_PORT || '9000'),
-      useSSL: false,
+      useSSL: process.env.MINIO_USE_SSL === 'true',
       accessKey: process.env.MINIO_ACCESS_KEY || 'minioadmin',
       secretKey: process.env.MINIO_SECRET_KEY || 'minioadmin',
     });
@@ -29,20 +29,6 @@ export class VideosService {
     const exists = await this.minioClient.bucketExists(this.bucketName);
     if (!exists) {
       await this.minioClient.makeBucket(this.bucketName);
-      
-      // Set bucket policy to allow public read access for HLS index (.m3u8) and segment (.ts) streaming
-      const policy = {
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Principal: { AWS: ['*'] },
-            Action: ['s3:GetObject'],
-            Resource: [`arn:aws:s3:::${this.bucketName}/*`],
-          },
-        ],
-      };
-      await this.minioClient.setBucketPolicy(this.bucketName, JSON.stringify(policy));
     }
   }
 
@@ -80,6 +66,11 @@ export class VideosService {
         outputKeyPrefix,
         lessonId,
         submissionId,
+      }, {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: { age: 86400, count: 1000 },
+        removeOnFail: { age: 604800, count: 1000 },
       });
 
       return {

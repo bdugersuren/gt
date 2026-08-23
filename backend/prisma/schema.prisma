@@ -21,6 +21,12 @@ enum EnrollmentType {
   CLASS_BATCH
 }
 
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  FAILED
+}
+
 enum CBTStatus {
   NOT_EVALUATED
   COMPETENT           // C - Чадамж эзэмшсэн
@@ -66,6 +72,7 @@ model User {
   classGroupId    String?
   classGroup      ClassGroup?     @relation(fields: [classGroupId], references: [id])
   enrollments     Enrollment[]
+  enrollmentStatusChanges Enrollment[] @relation("EnrollmentStatusChangedBy")
   teachingCourses Course[]        @relation("CourseTeachers")
   submissions     Submission[]
   rubricScores    RubricScore[]
@@ -142,10 +149,19 @@ model Enrollment {
   startDate    DateTime
   endDate      DateTime
   isActive     Boolean        @default(true)
+  status       EnrollmentStatus @default(ACTIVE)
+  statusChangedAt DateTime       @default(now())
+  statusChangedById String?
+  statusChangedBy   User?        @relation("EnrollmentStatusChangedBy", fields: [statusChangedById], references: [id], onDelete: SetNull)
+  statusReason String?
   cbtStatus    CBTStatus      @default(NOT_EVALUATED)
   createdAt    DateTime       @default(now())
 
   @@index([studentId, courseId])
+  @@unique([courseId, studentId])
+  @@index([courseId, status])
+  @@index([courseId, classGroupId])
+  @@index([statusChangedById])
 }
 
 model Module {

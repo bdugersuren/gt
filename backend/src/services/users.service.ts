@@ -61,18 +61,18 @@ export class UsersService {
     const idxCompanyName = headers.indexOf('companyName');
     const idxDepartmentCode = headers.indexOf('departmentCode');
     const idxClassGroupCode = headers.indexOf('classGroupCode');
+    const idxTemporaryPassword = headers.indexOf('temporaryPassword');
 
     // Required fields check
-    if (idxUsername === -1 || idxEmail === -1 || idxFullName === -1 || idxCode === -1 || idxRole === -1) {
-      throw new BadRequestException('CSV файл нь username, email, fullName, code, role багануудыг заавал агуулсан байх ёстой');
+    if (idxUsername === -1 || idxEmail === -1 || idxFullName === -1 || idxCode === -1 || idxRole === -1 || idxTemporaryPassword === -1) {
+      throw new BadRequestException('CSV файл нь username, email, fullName, code, role, temporaryPassword багануудыг заавал агуулсан байх ёстой');
     }
 
     const errors: Array<{ row: number; username?: string; error: string }> = [];
     let importedCount = 0;
     let failedCount = 0;
-
-    // Default password for imported users
-    const defaultPasswordHash = await bcrypt.hash('Student@123', 10);
+    const executor = await this.prisma.user.findUnique({ where: { id: executorId }, select: { roles: true } });
+    if (!executor) throw new BadRequestException('Импорт хийж буй хэрэглэгч олдсонгүй');
 
     // Loop through rows (skip header)
     for (let i = 1; i < lines.length; i++) {
@@ -92,10 +92,17 @@ export class UsersService {
       const companyName = idxCompanyName !== -1 ? row[idxCompanyName] : undefined;
       const departmentCode = idxDepartmentCode !== -1 ? row[idxDepartmentCode] : undefined;
       const classGroupCode = idxClassGroupCode !== -1 ? row[idxClassGroupCode] : undefined;
+      const temporaryPassword = row[idxTemporaryPassword];
 
       // 1. Validate required fields
-      if (!username || !email || !fullName || !code || !roleStr) {
-        errors.push({ row: rowNum, username, error: 'Заавал байх ёстой мэдээлэл дутуу байна (username, email, fullName, code, role)' });
+      if (!username || !email || !fullName || !code || !roleStr || !temporaryPassword) {
+        errors.push({ row: rowNum, username, error: 'Заавал байх ёстой мэдээлэл дутуу байна (username, email, fullName, code, role, temporaryPassword)' });
+        failedCount++;
+        continue;
+      }
+
+      if (temporaryPassword.length < 12) {
+        errors.push({ row: rowNum, username, error: 'Түр нууц үг хамгийн багадаа 12 тэмдэгт байна' });
         failedCount++;
         continue;
       }
@@ -108,6 +115,11 @@ export class UsersService {
       }
 
       const role = roleStr as Role;
+      if (!executor.roles.includes(Role.ADMIN) && (role === Role.ADMIN || role === Role.MANAGER)) {
+        errors.push({ row: rowNum, username, error: 'Зөвхөн админ ADMIN эсвэл MANAGER эрхтэй хэрэглэгч импортлох боломжтой' });
+        failedCount++;
+        continue;
+      }
 
       // 3. Validate Mongolian Registration Number (if provided or student/teacher)
       if (registerNumber) {
@@ -175,12 +187,13 @@ export class UsersService {
 
       // 7. Write to database
       try {
+        const passwordHash = await bcrypt.hash(temporaryPassword, 10);
         await this.prisma.user.create({
           data: {
             username,
             email,
             fullName,
-            passwordHash: defaultPasswordHash,
+            passwordHash,
             code,
             roles: [role],
             registerNumber,
@@ -371,4 +384,3 @@ export class UsersService {
     });
   }
 }
-

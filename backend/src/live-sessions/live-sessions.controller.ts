@@ -23,20 +23,20 @@ export class LiveSessionsController {
   @AuditLogAction('LIVE_SESSION_CREATE')
   @UseInterceptors(AuditLogInterceptor)
   async createSession(@Body() dto: CreateLiveSessionDto, @Request() req: any) {
-    return this.liveSessionsService.createSession(req.user.sub, dto);
+    return this.liveSessionsService.createSession(req.user.id, dto);
   }
 
   // GET — List all sessions for a course
   @Get('course/:courseId')
   @Roles(Role.TEACHER, Role.MANAGER, Role.STUDENT)
-  async getSessionsByCourse(@Param('courseId') courseId: string) {
-    return this.liveSessionsService.getSessionsByCourse(courseId);
+  async getSessionsByCourse(@Param('courseId') courseId: string, @Request() req: any) {
+    return this.liveSessionsService.getSessionsByCourse(courseId, req.user.id, req.user.roles);
   }
 
   // GET — Find by PIN code (students use this to preview before joining via WebSocket)
   @Get('code/:code')
-  async findByCode(@Param('code') code: string) {
-    return this.liveSessionsService.findByCode(code);
+  async findByCode(@Param('code') code: string, @Request() req: any) {
+    return this.liveSessionsService.findByCode(code, req.user.id, req.user.roles);
   }
 
   // GET — Get single session details
@@ -52,7 +52,7 @@ export class LiveSessionsController {
   @AuditLogAction('LIVE_SESSION_START')
   @UseInterceptors(AuditLogInterceptor)
   async startSession(@Param('id') id: string, @Request() req: any) {
-    return this.liveSessionsService.startSession(id, req.user.sub);
+    return this.liveSessionsService.startSession(id, req.user.id);
   }
 
   // PATCH — End a session (status → ENDED)
@@ -61,7 +61,7 @@ export class LiveSessionsController {
   @AuditLogAction('LIVE_SESSION_END')
   @UseInterceptors(AuditLogInterceptor)
   async endSession(@Param('id') id: string, @Request() req: any) {
-    return this.liveSessionsService.endSession(id, req.user.sub);
+    return this.liveSessionsService.endSession(id, req.user.id);
   }
 
   // DELETE — Delete a scheduled session
@@ -70,7 +70,7 @@ export class LiveSessionsController {
   @AuditLogAction('LIVE_SESSION_DELETE')
   @UseInterceptors(AuditLogInterceptor)
   async deleteSession(@Param('id') id: string, @Request() req: any) {
-    return this.liveSessionsService.deleteSession(id, req.user.sub);
+    return this.liveSessionsService.deleteSession(id, req.user.id);
   }
 
   // POST — Create a poll in an active session
@@ -81,7 +81,7 @@ export class LiveSessionsController {
     @Body() dto: CreatePollDto,
     @Request() req: any,
   ) {
-    return this.liveSessionsService.createPoll(sessionId, req.user.sub, dto);
+    return this.liveSessionsService.createPoll(sessionId, req.user.id, dto);
   }
 
   // GET — Get poll results

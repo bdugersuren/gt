@@ -2,14 +2,13 @@
 import React, { useEffect, useState } from 'react';
 import {
   Shield, Server, FileLock, UserCheck, CheckCircle2, AlertTriangle,
-  Upload, Table, Download, RefreshCw, Database
+  Upload, Table, RefreshCw, Database
 } from 'lucide-react';
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('backup');
 
   // Data states
-  const [backups, setBackups] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -35,15 +34,7 @@ export default function AdminDashboard() {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
     try {
-      // 1. Fetch backups list
-      const backupRes = await fetch(`${apiUrl}/admin/backups`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (backupRes.ok) {
-        setBackups(await backupRes.json());
-      }
-
-      // 2. Fetch audit logs
+      // Fetch audit logs
       const logsRes = await fetch(`${apiUrl}/admin/audit-logs`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
@@ -61,54 +52,6 @@ export default function AdminDashboard() {
   useEffect(() => {
     loadData();
   }, []);
-
-  // Handle Backup Creation
-  const handleCreateBackup = async () => {
-    const token = localStorage.getItem('token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-
-    try {
-      const res = await fetch(`${apiUrl}/admin/backup`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-
-      if (res.ok) {
-        showToast('Системийн нөөцлөлтийг амжилттай үүсгэлээ!');
-        loadData();
-      } else {
-        showToast('Нөөцлөлт үүсгэхэд алдаа гарлаа', 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Холболтын алдаа гарлаа', 'error');
-    }
-  };
-
-  // Handle Backup Restore
-  const handleRestoreBackup = async (filename: string) => {
-    if (!confirm(`Та ${filename} нөөц хуулбарыг сэргээхдээ итгэлтэй байна уу? Энэ нь одоогийн өгөгдлийг дарах болно.`)) return;
-
-    const token = localStorage.getItem('token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-
-    try {
-      const res = await fetch(`${apiUrl}/admin/restore/${filename}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-
-      if (res.ok) {
-        showToast('Системийг нөөц хуулбараас амжилттай сэргээлээ!');
-        loadData();
-      } else {
-        showToast('Сэргээх үйлдэл амжилтгүй боллоо', 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Холболтын алдаа гарлаа', 'error');
-    }
-  };
 
   // Handle CSV Import Submit
   const handleFileImport = async (e: React.FormEvent) => {
@@ -173,7 +116,7 @@ export default function AdminDashboard() {
           </div>
           <h2 className="text-xl font-black">Хяналтын нэгдсэн самбар</h2>
           <p className="text-slate-400 text-xs max-w-md leading-relaxed">
-            Эндээс системийн өгөгдлийн сангийн нөөцлөлт хийх, сэргээх, системийн бүх логуудыг (audit logs) хянах болон ESIS/Excel CSV файлаар сурагчдыг багцаар импортлох үйлдлүүдийг гүйцэтгэнэ.
+            Эндээс нөөцлөлтийн ажиллагааны төлөвийг харах, audit log хянах болон CSV файлаар сурагчдыг багцаар импортлох боломжтой.
           </p>
         </div>
         <div className="absolute right-0 bottom-0 w-48 h-48 bg-orange-500/5 rounded-full blur-2xl" />
@@ -218,57 +161,23 @@ export default function AdminDashboard() {
           {/* ==================== TAB CONTENT: BACKUPS ==================== */}
           {activeTab === 'backup' && (
             <div className="space-y-6">
-              {/* Actions Box */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-5 rounded-2xl shadow-sm flex gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Шинэ нөөцлөлт үүсгэх</h3>
-                  <p className="text-[11px] text-slate-450 mt-1">PostgreSQL болон MinIO медиа сангийн өгөгдлийг бүрэн архивлан хадгална.</p>
+                  <h3 className="text-xs font-black text-amber-900 dark:text-amber-200 uppercase tracking-wider">Restore үйлдэл хамгаалагдсан</h3>
+                  <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-1 leading-relaxed">
+                    Нөөцлөлт нь серверийн баталгаатай operational job-оор хийгдэнэ. Production өгөгдлийг веб интерфейсээс шууд сэргээх боломжгүй; staging restore drill болон ажиллагааны зөвшөөрөл шаардлагатай.
+                  </p>
                 </div>
-                <button
-                  onClick={handleCreateBackup}
-                  className="bg-orange-500 hover:bg-orange-600 text-white font-black text-xs px-5 py-2.5 rounded-xl transition-all shadow-md shadow-orange-500/10 flex items-center gap-1.5 shrink-0"
-                >
-                  <Database className="w-4 h-4" />
-                  <span>Шинэ архив үүсгэх</span>
-                </button>
               </div>
 
-              {/* Archive list table */}
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-                <h4 className="text-xs font-black text-slate-450 uppercase tracking-widest">Хадгалагдсан архивуудын жагсаалт</h4>
-                {backups.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic">Одоогоор үүсгэсэн архивын файл байхгүй байна.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 font-bold uppercase">
-                          <th className="py-3 px-4">Файлын нэр</th>
-                          <th className="py-3 px-4">Хэмжээ</th>
-                          <th className="py-3 px-4">Үүсгэсэн огноо</th>
-                          <th className="py-3 px-4 text-right">Үйлдэл</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50 dark:divide-slate-850">
-                        {backups.map((b) => (
-                          <tr key={b.filename} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
-                            <td className="py-3 px-4 font-mono font-bold text-slate-850 dark:text-slate-200">{b.filename}</td>
-                            <td className="py-3 px-4 font-mono text-slate-500">{(b.sizeBytes / 1024).toFixed(2)} KB</td>
-                            <td className="py-3 px-4 text-slate-450">{new Date(b.createdAt).toLocaleString('mn-MN')}</td>
-                            <td className="py-3 px-4 text-right">
-                              <button
-                                onClick={() => handleRestoreBackup(b.filename)}
-                                className="bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-[10px] px-3.5 py-1.5 rounded-xl transition-all"
-                              >
-                                Сэргээх (Restore)
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                <h4 className="text-xs font-black text-slate-450 uppercase tracking-widest">Одоогийн ажиллагааны бодлого</h4>
+                <ul className="text-xs text-slate-600 dark:text-slate-300 space-y-2 list-disc pl-5">
+                  <li>PostgreSQL custom-format dump болон MinIO object backup тусдаа хадгалагдана.</li>
+                  <li>Backup бүр SHA-256 checksum болон manifest-тай байна.</li>
+                  <li>Restore эхлээд staging орчинд шалгагдсаны дараа production ажиллагаанд зөвшөөрөгдөнө.</li>
+                </ul>
               </div>
             </div>
           )}
@@ -341,7 +250,7 @@ export default function AdminDashboard() {
                       />
                       <Upload className="w-8 h-8 text-slate-350 mx-auto mb-2" />
                       <p className="font-bold text-slate-650 dark:text-slate-350">CSV Файл сонгох</p>
-                      <p className="text-[9px] text-slate-400 mt-1">Зөвхөн .csv формат</p>
+                      <p className="text-[9px] text-slate-400 mt-1">CSV багана: username, email, fullName, code, role, temporaryPassword</p>
                     </div>
 
                     {selectedFile && (

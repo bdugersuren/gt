@@ -41,7 +41,7 @@ export class VideosController {
       error?: string;
     },
   ) {
-    const expectedToken = 'pk_transcoder_shared_secret_key';
+    const expectedToken = process.env.TRANSCODER_SHARED_SECRET;
     if (!token || token !== expectedToken) {
       throw new UnauthorizedException('Хандах эрх хүчингүй байна (Callback token invalid)');
     }

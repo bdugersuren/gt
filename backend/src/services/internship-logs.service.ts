@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Role } from '@prisma/client';
 import { CreateLogDto } from '../internship-logs/dto/create-log.dto';
@@ -22,9 +22,9 @@ export class InternshipLogsService {
   }
 
   // Get daily logs filtered by role and student filters
-  async findLogs(query: { studentId?: string }, currentUser: { id: string; role: Role }) {
+  async findLogs(query: { studentId?: string }, currentUser: { id: string; roles: Role[] }) {
     // Students can only view their own logs
-    if (currentUser.role === Role.STUDENT) {
+    if (currentUser.roles.includes(Role.STUDENT) && currentUser.roles.length === 1) {
       return this.prisma.internshipLog.findMany({
         where: { studentId: currentUser.id },
         include: {
@@ -81,6 +81,10 @@ export class InternshipLogsService {
 
     if (!log) {
       throw new NotFoundException('Дадлагын тэмдэглэл олдсонгүй');
+    }
+
+    if (log.mentorId && log.mentorId !== mentorId) {
+      throw new ForbiddenException('Энэ тэмдэглэлийг өөр ментор хариуцаж байна');
     }
 
     return this.prisma.internshipLog.update({

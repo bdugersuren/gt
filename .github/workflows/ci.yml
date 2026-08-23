@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/validation
+    services:
+      postgres:
+        image: postgres:16.15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: validation
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d validation"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter pk-backend exec prisma validate
+      - run: pnpm --filter pk-backend exec prisma generate
+      - run: pnpm --filter pk-backend exec prisma migrate deploy
+      - run: pnpm --filter pk-backend exec prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel backend/prisma/schema.prisma --exit-code
+      - run: pnpm typecheck
+      - run: pnpm build
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: validate
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate production compose
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci-postgres-password
+          POSTGRES_DB: gt_lms
+          REDIS_PASSWORD: ci-redis-password
+          MINIO_ROOT_USER: ci-minio
+          MINIO_ROOT_PASSWORD: ci-minio-password
+          JWT_SECRET: ci-jwt-secret-that-is-at-least-32-characters
+          TRANSCODER_SHARED_SECRET: ci-transcoder-secret-at-least-32-characters
+          CORS_ORIGINS: https://example.invalid
+          NEXT_PUBLIC_APP_URL: https://example.invalid
+          NEXT_PUBLIC_API_URL: https://example.invalid/api
+          PUBLIC_APP_URL: https://example.invalid
+        run: docker compose config --quiet
+      - run: docker build -f backend/Dockerfile -t gt-lms-backend:ci .
+      - run: docker build -f frontend/Dockerfile -t gt-lms-frontend:ci .
+      - run: docker build -f workers/transcoder/Dockerfile -t gt-lms-transcoder:ci .
+      - name: Verify runtime entrypoints
+        run: |
+          docker run --rm --entrypoint node gt-lms-backend:ci -e "require.resolve('@nestjs/core',{paths:['/app/backend']}); console.log('backend runtime ok')"
+          docker run --rm --entrypoint node gt-lms-frontend:ci -e "require('fs').accessSync('/app/frontend/server.js'); console.log('frontend runtime ok')"
+          docker run --rm --entrypoint node -e TRANSCODER_SHARED_SECRET=ci-secret gt-lms-transcoder:ci -e "require.resolve('bullmq',{paths:['/app/workers/transcoder']}); console.log('worker runtime ok')"

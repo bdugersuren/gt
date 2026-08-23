@@ -1,19 +1,22 @@
 'use client';
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
-  GraduationCap, BookOpen, Users, LogOut, ArrowLeft,
-  Menu, X, ShieldAlert, BarChart3, Settings, Bell, Compass
+  BookOpen, Users, LogOut, UserPlus,
+  Menu, X, ShieldAlert, BarChart3, Bell, Compass, AlertTriangle, Upload
 } from 'lucide-react';
 
+interface ManagerUser { fullName: string; code?: string; roles: string[] }
+
 export default function ManagerLayout({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<ManagerUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [unauthorized, setUnauthorized] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -22,12 +25,13 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
     const userData = localStorage.getItem('user');
 
     if (!token || !userData) {
-      router.push('/login');
+      setLoading(false);
+      router.replace('/login');
       return;
     }
 
     try {
-      const parsedUser = JSON.parse(userData);
+      const parsedUser = JSON.parse(userData) as ManagerUser;
       const activeRole = localStorage.getItem('activeRole');
       const roles = parsedUser.roles || [];
 
@@ -49,6 +53,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('activeRole');
     router.push('/login');
   };
 
@@ -111,15 +116,19 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
 
           {/* Navigation Links */}
           <nav className="p-4 space-y-1">
-            <Link
-              href="/manager"
-              className="flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold bg-slate-800 text-white transition-all"
-            >
-              <BarChart3 className="w-4 h-4 text-teal-400" />
-              <span>Хянах самбар (Dashboard)</span>
-            </Link>
+            {[
+              { href: '/manager', label: 'Хянах самбар', icon: BarChart3 },
+              { href: '/manager/courses', label: 'Курсын удирдлага', icon: BookOpen },
+              { href: '/manager/enrollments', label: 'Суралцагч бүртгэх', icon: UserPlus },
+              { href: '/manager/users/import', label: 'Excel импорт', icon: Upload },
+              { href: '/manager/announcements', label: 'Зарлан мэдээлэл', icon: Bell },
+              { href: '/manager/risks', label: 'Явц ба эрсдэл', icon: AlertTriangle },
+            ].map(({ href, label, icon: Icon }) => {
+              const active = pathname === href || (href !== '/manager' && pathname.startsWith(href));
+              return <Link key={href} href={href} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${active ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Icon className="w-4 h-4" /><span>{label}</span></Link>;
+            })}
 
-            {user?.roles?.length > 1 && (
+            {(user?.roles.length || 0) > 1 && (
               <Link
                 href="/role-select"
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-850/50 transition-all"
@@ -181,7 +190,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
         </header>
 
         {/* Content Body */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto p-6">
           {children}
         </main>
       </div>

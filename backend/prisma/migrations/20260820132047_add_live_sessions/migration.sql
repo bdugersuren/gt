@@ -1,1 +1,1 @@
--- This is an empty migration.
+-- Kept as an empty migration for compatibility with the original history.

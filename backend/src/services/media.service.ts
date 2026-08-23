@@ -1,6 +1,6 @@
-import { Injectable, BadRequestException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { MediaAssetType } from '@prisma/client';
+import { MediaAssetType, Role } from '@prisma/client';
 import * as Minio from 'minio';
 import { randomUUID } from 'crypto';
 import { Readable } from 'stream';
@@ -58,7 +58,7 @@ export class MediaService {
     this.minioClient = new Minio.Client({
       endPoint:  process.env.MINIO_ENDPOINT  || 'minio',
       port:      parseInt(process.env.MINIO_PORT || '9000'),
-      useSSL:    false,
+      useSSL:    process.env.MINIO_USE_SSL === 'true',
       accessKey: process.env.MINIO_ACCESS_KEY || 'minioadmin',
       secretKey: process.env.MINIO_SECRET_KEY || 'minioadmin',
     });
@@ -76,26 +76,7 @@ export class MediaService {
       await this.minioClient.makeBucket(this.bucket);
     }
 
-    // Нийтийн хандалтын бодлого: images, pdfs, audio, markdown, hls фолдеруудт
-    // зөвхөн GetObject хандалт зөвшөөрнө. raw/ фолдер хаалттай.
-    const policy = {
-      Version: '2012-10-17',
-      Statement: [
-        {
-          Effect:    'Allow',
-          Principal: { AWS: ['*'] },
-          Action:    ['s3:GetObject'],
-          Resource: [
-            `arn:aws:s3:::${this.bucket}/images/*`,
-            `arn:aws:s3:::${this.bucket}/pdfs/*`,
-            `arn:aws:s3:::${this.bucket}/audio/*`,
-            `arn:aws:s3:::${this.bucket}/markdown/*`,
-            `arn:aws:s3:::${this.bucket}/hls/*`,
-          ],
-        },
-      ],
-    };
-    await this.minioClient.setBucketPolicy(this.bucket, JSON.stringify(policy));
+    // Buckets stay private. Clients receive short-lived presigned URLs.
   }
 
   // ─── Нэг файл байршуулах ─────────────────────────────────────────────────────
@@ -200,6 +181,42 @@ export class MediaService {
   // ─── Presigned URL үүсгэх (хуваалцах / хязгаарлагдмал хандалт) ─────────────
   async getPresignedUrl(key: string, expirySeconds = 3600): Promise<string> {
     return this.minioClient.presignedGetObject(this.bucket, key, expirySeconds);
+  }
+
+  async getAuthorizedPresignedUrl(key: string, userId: string, roles: Role[], expirySeconds: number) {
+    const asset = await this.prisma.mediaAsset.findFirst({
+      where: { objectKey: key },
+      include: { lesson: { select: { module: { select: { courseId: true } } } } },
+    });
+    if (!asset) throw new NotFoundException('Медиа файл олдсонгүй');
+    if (!roles.includes(Role.ADMIN) && !roles.includes(Role.MANAGER) && asset.uploaderId !== userId) {
+      const courseId = asset.courseId || asset.lesson?.module.courseId;
+      if (!courseId) throw new BadRequestException('Медиа файл курс эсвэл хичээлтэй холбоогүй байна');
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { classGroupId: true } });
+      const allowed = await this.prisma.course.count({
+        where: {
+          id: courseId,
+          OR: [
+            { teachers: { some: { id: userId } } },
+            {
+              enrollments: {
+                some: {
+                  isActive: true,
+                  startDate: { lte: new Date() },
+                  endDate: { gte: new Date() },
+                  OR: [
+                    { studentId: userId },
+                    ...(user?.classGroupId ? [{ classGroupId: user.classGroupId }] : []),
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      });
+      if (!allowed) throw new ForbiddenException('Энэ медиа файлд хандах эрхгүй байна');
+    }
+    return this.getPresignedUrl(key, expirySeconds);
   }
 
   // ─── Курс эсвэл лекцтэй холбоотой бүх материалыг жагсаах ───────────────────
