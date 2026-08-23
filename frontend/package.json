@@ -1,0 +1,48 @@
+{
+  "name": "pk-frontend",
+  "version": "1.0.0",
+  "description": "Next.js 14+ PWA Frontend Client for Gurvan Tamir Polytechnic College LMS",
+  "author": "Antigravity Dev Team",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.0.5",
+    "@radix-ui/react-dropdown-menu": "^2.0.6",
+    "@radix-ui/react-slot": "^1.0.2",
+    "@tanstack/react-query": "^5.37.1",
+    "autoprefixer": "^10.4.19",
+    "clsx": "^2.1.1",
+    "dexie": "^4.0.4",
+    "dexie-react-hooks": "^1.1.7",
+    "hls.js": "^1.5.8",
+    "katex": "^0.16.10",
+    "lucide-react": "^0.378.0",
+    "mermaid": "^10.9.1",
+    "next": "^14.2.3",
+    "postcss": "^8.4.38",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.0.1",
+    "rehype-katex": "^7.0.0",
+    "rehype-raw": "^7.0.0",
+    "remark-gfm": "^4.0.0",
+    "remark-math": "^6.0.0",
+    "socket.io-client": "^4.8.3",
+    "tailwind-merge": "^2.3.0",
+    "tailwindcss": "^3.4.3",
+    "typescript": "^5.4.5",
+    "zustand": "^4.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.3"
+  }
+}

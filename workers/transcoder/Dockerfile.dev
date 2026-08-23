@@ -1,0 +1,10 @@
+FROM node:20-alpine
+RUN apk add --no-cache ffmpeg
+WORKDIR /app
+RUN npm i -g pnpm
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY workers/transcoder/package.json ./workers/transcoder/
+RUN pnpm install --filter=pk-transcoder-worker...
+COPY workers/transcoder ./workers/transcoder
+WORKDIR /app/workers/transcoder
+CMD ["pnpm", "start:dev"]

@@ -1,0 +1,488 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  TEACHER
+  ENTERPRISE_MENTOR
+  STUDENT
+}
+
+enum EnrollmentType {
+  INDIVIDUAL
+  CLASS_BATCH
+}
+
+enum CBTStatus {
+  NOT_EVALUATED
+  COMPETENT           // C - Чадамж эзэмшсэн
+  NOT_YET_COMPETENT   // NYC - Хараахан чадамж эзэмшээгүй
+  RE_ASSESSMENT_REQ   // Дахин үнэлгээ хүссэн
+}
+
+enum SubmissionType {
+  TEXT
+  FILE
+  LINK
+  PRACTICAL_VIDEO
+  PRACTICAL_PHOTO
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SHORT_ANSWER
+  MATCHING
+}
+
+enum LiveSessionStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+}
+
+model User {
+  id              String          @id @default(uuid())
+  username        String          @unique
+  email           String          @unique
+  passwordHash    String
+  fullName        String
+  registerNumber  String?         // Монгол улсын Регистрийн дугаар (ESIS нийцэл)
+  code            String          @unique // Student / Staff ID Code
+  roles           Role[]          @default([STUDENT])
+  avatarUrl       String?
+  phone           String?
+  companyName     String?         // Дадлага олгогч ААН-ийн нэр (Enterprise Mentors)
+  departmentId    String?
+  department      Department?     @relation(fields: [departmentId], references: [id])
+  classGroupId    String?
+  classGroup      ClassGroup?     @relation(fields: [classGroupId], references: [id])
+  enrollments     Enrollment[]
+  teachingCourses Course[]        @relation("CourseTeachers")
+  submissions     Submission[]
+  rubricScores    RubricScore[]
+  quizAttempts    QuizAttempt[]
+  internshipLogs  InternshipLog[] @relation("StudentInternship")
+  mentorLogs      InternshipLog[] @relation("MentorReviewed")
+  progressLogs    ProgressLog[]
+  auditLogs       AuditLog[]
+  badges          SkillBadge[]
+  sentMessages      Message[]      @relation("SentMessages")
+  receivedMessages  Message[]      @relation("ReceivedMessages")
+  sentAnnouncements Announcement[] @relation("SentAnnouncements")
+  userAnnouncements Announcement[] @relation("UserAnnouncements")
+  uploadedAssets    MediaAsset[]   @relation("UploadedAssets")
+  hostedSessions    LiveSession[]  @relation("SessionTeacher")
+  liveAttendances   LiveAttendee[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([departmentId])
+}
+
+model Department {
+  id          String       @id @default(uuid())
+  name        String       // e.g., Хөдөө аж ахуй, Мэдээлэл технологи, Гагнуур
+  code        String       @unique
+  users       User[]
+  courses     Course[]
+  classes     ClassGroup[]
+  createdAt   DateTime     @default(now())
+}
+
+model ClassGroup {
+  id           String       @id @default(uuid())
+  name         String       // e.g., Малын эмч 3A, Барилгын цахилгаан 2B
+  code         String       @unique
+  academicYear String       // e.g., "2025-2026"
+  departmentId String
+  department   Department   @relation(fields: [departmentId], references: [id])
+  students     User[]
+  enrollments  Enrollment[]
+  createdAt    DateTime     @default(now())
+}
+
+model Course {
+  id           String         @id @default(uuid())
+  title        String
+  code         String         @unique // e.g., VET-AGR-201
+  description  String?
+  coverImage   String?
+  isCBT        Boolean        @default(true) // Чадамжид суурилсан эсэх
+  departmentId String
+  department   Department     @relation(fields: [departmentId], references: [id])
+  teachers     User[]         @relation("CourseTeachers")
+  modules      Module[]
+  enrollments  Enrollment[]
+  questionBank Question[]
+  messages     Message[]
+  mediaAssets  MediaAsset[]   // Курстай холбоотой бүх медиа материалууд
+  liveSessions LiveSession[]  // Live хичээлийн жагсаалт
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+model Enrollment {
+  id           String         @id @default(uuid())
+  type         EnrollmentType @default(INDIVIDUAL)
+  courseId     String
+  course       Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  studentId    String?
+  student      User?          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classGroupId String?
+  classGroup   ClassGroup?    @relation(fields: [classGroupId], references: [id], onDelete: Cascade)
+  startDate    DateTime
+  endDate      DateTime
+  isActive     Boolean        @default(true)
+  cbtStatus    CBTStatus      @default(NOT_EVALUATED)
+  createdAt    DateTime       @default(now())
+
+  @@index([studentId, courseId])
+}
+
+model Module {
+  id          String       @id @default(uuid())
+  title       String       // e.g., "Чадамжийн нэгж 1: Хөдөлгүүрийн засвар"
+  order       Int
+  courseId    String
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+  createdAt   DateTime     @default(now())
+}
+
+model Lesson {
+  id             String             @id @default(uuid())
+  title          String             // e.g., "Чадамжийн элемент 1.1: Аюулгүй ажиллагаа"
+  order          Int
+  contentType    String             // MARKDOWN, VIDEO_HLS, PDF, QUIZ, PRACTICAL_LAB
+  contentBody    String?            // Markdown text with KaTeX / Mermaid
+  videoUrl       String?            // Master / HLS Manifest URL (.m3u8)
+  pdfUrl         String?            // MinIO PDF object URL
+  moduleId       String
+  module         Module             @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  prerequisites  LessonPrerequisite[] @relation("DependentLesson")
+  requiredFor    LessonPrerequisite[] @relation("RequiredLesson")
+  assignments    Assignment[]
+  quizzes        Quiz[]
+  progressLogs   ProgressLog[]
+  mediaAssets    MediaAsset[]         // Лекцтэй холбоотой бүх медиа материалууд
+  isApproved     Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+}
+
+model LessonPrerequisite {
+  id             String   @id @default(uuid())
+  lessonId       String
+  lesson         Lesson   @relation("DependentLesson", fields: [lessonId], references: [id], onDelete: Cascade)
+  prerequisiteId String
+  prerequisite   Lesson   @relation("RequiredLesson", fields: [prerequisiteId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, prerequisiteId])
+}
+
+model Assignment {
+  id             String         @id @default(uuid())
+  title          String
+  description    String         // Markdown instructions & safety warnings
+  dueDate        DateTime
+  isCBTRequired  Boolean        @default(true)
+  maxScore       Float          @default(100)
+  lessonId       String
+  lesson         Lesson         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  rubrics        Rubric[]
+  submissions    Submission[]
+  createdAt      DateTime       @default(now())
+}
+
+model Rubric {
+  id           String           @id @default(uuid())
+  assignmentId String
+  assignment   Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  title        String           // e.g., "ХАБЭА мөрдөлт", "Багаж тохируулга"
+  weight       Float            // Percentage weight (e.g., 30.0)
+  criteria     RubricCriteria[]
+}
+
+model RubricCriteria {
+  id           String        @id @default(uuid())
+  rubricId     String
+  rubric       Rubric        @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+  description  String        // Detail of standard to achieve
+  points       Float         // Max points for this criteria
+  scores       RubricScore[]
+}
+
+model Submission {
+  id           String         @id @default(uuid())
+  type         SubmissionType @default(FILE)
+  content      String?
+  fileUrl      String?        // MinIO Object URL (Raw or Transcoded)
+  hlsStreamUrl String?        // If video, HLS streaming path
+  score        Float?         // Numerical score
+  cbtResult    CBTStatus      @default(NOT_EVALUATED)
+  feedback     String?        // Teacher or Mentor notes
+  studentId    String
+  student      User           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  assignmentId String
+  assignment   Assignment     @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  rubricScores RubricScore[]
+  submittedAt  DateTime       @default(now())
+}
+
+model RubricScore {
+  id           String         @id @default(uuid())
+  submissionId String
+  submission   Submission     @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  criteriaId   String
+  criteria     RubricCriteria @relation(fields: [criteriaId], references: [id], onDelete: Cascade)
+  scoreEarned  Float
+  evaluatorId  String
+  evaluator    User           @relation(fields: [evaluatorId], references: [id])
+}
+
+model Question {
+  id            String         @id @default(uuid())
+  courseId      String
+  course        Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  text          String         // Markdown & KaTeX supported
+  type          QuestionType   @default(MULTIPLE_CHOICE)
+  optionsJson   Json           // Array of option objects
+  correctAnswer String
+  explanation   String?
+  points        Float          @default(1.0)
+  quizQuestions QuizQuestion[]
+  createdAt     DateTime       @default(now())
+}
+
+model Quiz {
+  id            String         @id @default(uuid())
+  title         String
+  timeLimitMin  Int            @default(30)
+  passScore     Float          @default(60.0)
+  lessonId      String
+  lesson         Lesson         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  quizQuestions QuizQuestion[]
+  attempts      QuizAttempt[]
+  createdAt     DateTime       @default(now())
+}
+
+model QuizQuestion {
+  id         String   @id @default(uuid())
+  quizId     String
+  quiz       Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  order      Int      @default(1)
+
+  @@unique([quizId, questionId])
+}
+
+model QuizAttempt {
+  id          String   @id @default(uuid())
+  quizId      String
+  quiz        Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  score       Float
+  passed      Boolean
+  cbtResult   CBTStatus @default(NOT_EVALUATED)
+  answersJson Json
+  startedAt   DateTime @default(now())
+  completedAt DateTime @default(now())
+
+  @@index([studentId, quizId])
+}
+
+model InternshipLog {
+  id            String    @id @default(uuid())
+  studentId     String
+  student       User      @relation("StudentInternship", fields: [studentId], references: [id], onDelete: Cascade)
+  mentorId      String?
+  mentor        User?     @relation("MentorReviewed", fields: [mentorId], references: [id])
+  logDate       DateTime
+  hoursWorked   Float
+  workSummary   String    // Өдөрт хийсэн ажлын тайлан
+  safetyFollowed Boolean  @default(true) // ХАБЭА дүрэм мөрдсөн эсэх
+  mentorFeedback String?  // ААН-ийн менторын үнэлгээ, сэтгэгдэл
+  isApproved    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+}
+
+model ProgressLog {
+  id           String   @id @default(uuid())
+  studentId    String
+  student      User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessonId     String
+  lesson       Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  completed    Boolean  @default(false)
+  timeSpentSec Int      @default(0)
+  lastAccess   DateTime @default(now())
+
+  @@unique([studentId, lessonId])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String   // USER_IMPORT, GRADE_CHANGE, CBT_CERT_ISSUE
+  details   Json?
+  ipAddress String?
+  timestamp DateTime @default(now())
+}
+
+model JobVacancy {
+  id          String   @id @default(uuid())
+  title       String   // e.g., Туслах малын эмч
+  companyName String   // e.g., Архангай Импекс ХХК
+  description String
+  skillsReq   Json     // Array of course codes required (e.g. ["VET-AGR-101"])
+  location    String   // e.g., Архангай, Эрдэнэбулган
+  salary      String?  // e.g., 1.5 - 2.0 сая
+  createdAt   DateTime @default(now())
+}
+
+model SkillBadge {
+  id           String   @id @default(uuid())
+  studentId    String
+  student      User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId     String
+  badgeName    String   // e.g., Мал эмнэлгийн анхан шатны туслах тэмдэг
+  badgeImage   String?  // MinIO URL or preset badge style key
+  criteriaMet  String   // e.g., VET-AGR-101 course completion
+  blockchainTx String?  // Blockchain Transaction Hash (OpenBadges)
+  issuedAt     DateTime @default(now())
+
+  @@index([studentId])
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  content    String
+  senderId   String
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  courseId   String?
+  course     Course?  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([senderId, receiverId])
+}
+
+model Announcement {
+  id           String   @id @default(uuid())
+  title        String
+  content      String
+  targetRole   Role?    // Дүрээр шүүх (оюутнуудад, багш нарт г.м)
+  targetUserId String?  // Тухайлсан хэрэглэгчид
+  targetUser   User?    @relation("UserAnnouncements", fields: [targetUserId], references: [id], onDelete: Cascade)
+  senderId     String
+  sender       User     @relation("SentAnnouncements", fields: [senderId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+}
+
+// ─── MediaAsset: MinIO-д байршуулсан файл бүрийн metadata ────────────────────
+// Материал бүрийг хичээл болон курстай холбож хадгалах нь архивлалт,
+// backup, бүртгэл харах, хичээлтэй холбоотой бүх материалыг жагсаах зэрэгт
+// ашигтай.
+
+enum MediaAssetType {
+  IMAGE        // Зураг (jpeg, png, webp, gif)
+  PDF          // PDF баримт
+  AUDIO        // Аудио (mp3, wav, ogg, aac)
+  MARKDOWN     // Markdown (.md) файл
+  VIDEO_RAW    // Боловсруулагдаагүй видео (raw upload)
+  VIDEO_HLS    // FFmpeg-ээр хөрвүүлэгдсэн HLS стрим
+}
+
+model MediaAsset {
+  id            String         @id @default(uuid())
+
+  // Файлын байршлын мэдээлэл (MinIO)
+  bucketName    String         @default("lms-media")
+  objectKey     String         // MinIO дахь object key: "images/{uuid}.jpg"
+  publicUrl     String         // Нийтийн хандалтын URL
+  hlsUrl        String?        // Зөвхөн VIDEO_HLS-д: m3u8 stream URL
+
+  // Файлын тодорхойлолт
+  type          MediaAssetType
+  originalName  String         // Байршуулахаас өмнөх файлын нэр
+  mimeType      String
+  sizeBytes     BigInt         // Файлын хэмжээ байт-аар
+
+  // Хичээл / курстай холбоос — архивлалт болон backup-д шаардлагатай
+  lessonId      String?        // Тухайн лекцтэй холбоо
+  lesson        Lesson?        @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  courseId      String?        // Тухайн курстай холбоо (шаардлагатай үед)
+  course        Course?        @relation(fields: [courseId], references: [id], onDelete: SetNull)
+
+  // Хэн байршуулсан
+  uploaderId    String
+  uploader      User           @relation("UploadedAssets", fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([lessonId])
+  @@index([courseId])
+  @@index([uploaderId])
+  @@index([type, courseId])
+}
+
+// ─── LIVE SESSION MODELS ─────────────────────────────────────────────────────
+
+model LiveSession {
+  id            String            @id @default(uuid())
+  courseId      String
+  course        Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  teacherId     String
+  teacher       User              @relation("SessionTeacher", fields: [teacherId], references: [id])
+  title         String
+  sessionCode   String            @unique // 6-digit PIN
+  status        LiveSessionStatus @default(SCHEDULED)
+  scheduledAt   DateTime?
+  startedAt     DateTime?
+  endedAt       DateTime?
+  attendees     LiveAttendee[]
+  polls         LivePoll[]
+  createdAt     DateTime          @default(now())
+
+  @@index([courseId, status])
+  @@index([teacherId])
+}
+
+model LiveAttendee {
+  id         String      @id @default(uuid())
+  sessionId  String
+  session    LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId  String
+  student    User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  joinedAt   DateTime    @default(now())
+  leftAt     DateTime?
+
+  @@unique([sessionId, studentId])
+  @@index([sessionId])
+}
+
+model LivePoll {
+  id        String      @id @default(uuid())
+  sessionId String
+  session   LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  question  String
+  options   Json        // string[] — жагсаалт дахь сонголтууд
+  responses Json        @default("{}") // { studentId: optionIndex } map
+  isActive  Boolean     @default(true)
+  createdAt DateTime    @default(now())
+
+  @@index([sessionId, isActive])
+}

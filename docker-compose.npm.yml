@@ -1,0 +1,20 @@
+services:
+  # Nginx Proxy Manager Service (Central Reverse Proxy)
+  nginx-proxy-manager:
+    image: 'jc21/nginx-proxy-manager:latest'
+    container_name: pk_nginx_proxy_manager
+    restart: always
+    ports:
+      - '80:80' # Public HTTP
+      - '443:443' # Public HTTPS
+      - '81:81' # Admin Web Console
+    volumes:
+      - ./npm_data:/data
+      - ./npm_letsencrypt:/etc/letsencrypt
+    networks:
+      - shared-net
+
+networks:
+  shared-net:
+    external: true
+    name: shared-net
