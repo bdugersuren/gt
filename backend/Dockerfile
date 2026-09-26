@@ -7,7 +7,7 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
 COPY backend/package.json ./backend/
 RUN pnpm install --frozen-lockfile --filter=pk-backend...
 COPY backend ./backend
-RUN pnpm --filter=pk-backend exec prisma generate
+RUN pnpm --filter=pk-backend exec prisma generate --generator client --schema prisma/schema.prisma
 RUN pnpm --filter=pk-backend build
 
 # Stage 2: Runtime

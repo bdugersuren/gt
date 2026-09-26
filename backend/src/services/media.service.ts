@@ -8,7 +8,7 @@ import { Readable } from 'stream';
 // ─── Файлын хэмжээний хязгаар (байт) ─────────────────────────────────────────
 const MAX_SIZE: Record<string, number> = {
   image:    10 * 1024 * 1024,   // 10 MB
-  pdf:      20 * 1024 * 1024,   // 20 MB
+  pdf:      50 * 1024 * 1024,   // 20 MB
   audio:    50 * 1024 * 1024,   // 50 MB
   markdown: 2  * 1024 * 1024,   // 2  MB
   video:    500 * 1024 * 1024,  // 500 MB
@@ -183,6 +183,10 @@ export class MediaService {
     return this.minioClient.presignedGetObject(this.bucket, key, expirySeconds);
   }
 
+  async getObjectStream(key: string) {
+    return this.minioClient.getObject(this.bucket, key);
+  }
+
   async getAuthorizedPresignedUrl(key: string, userId: string, roles: Role[], expirySeconds: number) {
     const asset = await this.prisma.mediaAsset.findFirst({
       where: { objectKey: key },
@@ -192,25 +196,14 @@ export class MediaService {
     if (!roles.includes(Role.ADMIN) && !roles.includes(Role.MANAGER) && asset.uploaderId !== userId) {
       const courseId = asset.courseId || asset.lesson?.module.courseId;
       if (!courseId) throw new BadRequestException('Медиа файл курс эсвэл хичээлтэй холбоогүй байна');
-      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { classGroupId: true } });
       const allowed = await this.prisma.course.count({
         where: {
           id: courseId,
           OR: [
-            { teachers: { some: { id: userId } } },
-            {
-              enrollments: {
-                some: {
-                  isActive: true,
-                  startDate: { lte: new Date() },
-                  endDate: { gte: new Date() },
-                  OR: [
-                    { studentId: userId },
-                    ...(user?.classGroupId ? [{ classGroupId: user.classGroupId }] : []),
-                  ],
-                },
-              },
-            },
+            { teachers: { some: { teacherId: userId } } },
+            { enrollments: { some: { studentId: userId, status: 'ACTIVE', startDate: { lte: new Date() }, OR: [{ endDate: null }, { endDate: { gte: new Date() } }] } } },
+            { enrollments: { some: { classGroup: { memberships: { some: { studentId: userId, isCurrent: true } } }, status: 'ACTIVE', startDate: { lte: new Date() }, OR: [{ endDate: null }, { endDate: { gte: new Date() } }] } } },
+            { curriculumItems: { some: { enrollments: { some: { studentId: userId, status: 'ACTIVE' } } } } },
           ],
         },
       });

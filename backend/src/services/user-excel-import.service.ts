@@ -22,6 +22,7 @@ type ParsedRow = {
   errors: string[];
   departmentId?: string;
   classGroupId?: string;
+  programId?: string;
 };
 
 @Injectable()
@@ -125,7 +126,7 @@ export class UserExcelImportService {
   private async validate(file: Buffer, type: UserImportType): Promise<ParsedRow[]> {
     const rows = await this.parse(file, type);
     const departments = await this.prisma.department.findMany({ select: { id: true, code: true } });
-    const classes = await this.prisma.classGroup.findMany({ select: { id: true, code: true, departmentId: true } });
+    const classes = await this.prisma.classGroup.findMany({ select: { id: true, code: true, departmentId: true, programId: true } });
     const departmentMap = new Map(departments.map((item) => [item.code.toUpperCase(), item.id]));
     const classMap = new Map(classes.map((item) => [item.code.toUpperCase(), item]));
     const existing = await this.prisma.user.findMany({
@@ -158,6 +159,7 @@ export class UserExcelImportService {
         if (!classGroup) row.errors.push('Ангийн код олдсонгүй');
         else {
           row.classGroupId = classGroup.id;
+          row.programId = classGroup.programId || undefined;
           if (row.departmentId && classGroup.departmentId !== row.departmentId) row.errors.push('Анги сонгосон тэнхимд хамаарахгүй');
         }
       }
@@ -167,7 +169,7 @@ export class UserExcelImportService {
   }
 
   private safe(row: ParsedRow) {
-    const { temporaryPassword: _password, departmentId: _departmentId, classGroupId: _classGroupId, ...safe } = row;
+      const { temporaryPassword: _password, departmentId: _departmentId, classGroupId: _classGroupId, programId: _programId, ...safe } = row;
     return { ...safe, valid: row.errors.length === 0 };
   }
 
@@ -186,7 +188,11 @@ export class UserExcelImportService {
       username: row.username, email: row.email, fullName: row.fullName, code: row.code, phone: row.phone,
       registerNumber: type === 'STUDENT' ? row.registerNumber : undefined,
       roles: [type === 'TEACHER' ? Role.TEACHER : Role.STUDENT], passwordHash,
-      departmentId: row.departmentId, classGroupId: type === 'STUDENT' ? row.classGroupId : undefined,
+      staffProfile: type === 'TEACHER' ? { create: { departmentId: row.departmentId } } : undefined,
+      studentProfile: type === 'STUDENT' ? { create: {
+        status: 'ACTIVE', enrollmentYear: new Date().getFullYear(),
+        classMemberships: row.classGroupId ? { create: { classGroupId: row.classGroupId, startDate: new Date(), isCurrent: true } } : undefined,
+      } } : undefined,
     } })));
     await this.prisma.auditLog.create({ data: { userId: executorId, action: 'USER_EXCEL_IMPORT', details: { fileName, type, checksum, totalRows: rows.length, importedCount: prepared.length, failedCount: rows.length - prepared.length } } });
     return { success: rows.every((row) => !row.errors.length), fileChecksum: checksum, totalRows: rows.length, importedCount: prepared.length, failedCount: rows.length - prepared.length, errors: rows.filter((row) => row.errors.length).map((row) => this.safe(row)) };

@@ -20,6 +20,11 @@ import { AdminModule } from './admin/admin.module';
 import { MediaModule } from './media/media.module';
 import { LiveSessionsModule } from './live-sessions/live-sessions.module';
 import { HealthModule } from './health/health.module';
+import { ProgramsModule } from './programs/programs.module';
+import { PromotionsModule } from './promotions/promotions.module';
+import { CurriculumModule } from './curriculum/curriculum.module';
+import { StudentModule } from './student/student.module';
+import { LibraryModule } from './library/library.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { RequestLoggingInterceptor } from './middlewares/request-logging.interceptor';
 
@@ -35,10 +40,22 @@ import { RequestLoggingInterceptor } from './middlewares/request-logging.interce
     ClassGroupsModule,
     CoursesModule,
     LessonsModule,
-    BullModule.forRoot({
-      connection: {
-        host: 'redis',
-        port: 6379,
+    BullModule.forRootAsync({
+      useFactory: () => {
+        const redisUrl = new URL(process.env.REDIS_URL || 'redis://redis:6379');
+        return {
+          connection: {
+            host: redisUrl.hostname,
+            port: Number(redisUrl.port || 6379),
+            username: redisUrl.username
+              ? decodeURIComponent(redisUrl.username)
+              : undefined,
+            password: redisUrl.password
+              ? decodeURIComponent(redisUrl.password)
+              : undefined,
+            db: Number(redisUrl.pathname.slice(1) || 0),
+          },
+        };
       },
     }),
     VideosModule,
@@ -53,6 +70,11 @@ import { RequestLoggingInterceptor } from './middlewares/request-logging.interce
     MediaModule,
     LiveSessionsModule,
     HealthModule,
+    ProgramsModule,
+    PromotionsModule,
+    CurriculumModule,
+    StudentModule,
+    LibraryModule,
   ],
   controllers: [],
   providers: [

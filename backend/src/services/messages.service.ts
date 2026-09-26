@@ -50,61 +50,22 @@ export class MessagesService {
   // Get chat contacts (teachers, classmates, or students) for a given course context
   async getChatContacts(userId: string, activeRole: string, courseId?: string) {
     if (!courseId) {
-      // Fallback: return users from the same departments
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { departmentId: true },
-      });
-      return this.prisma.user.findMany({
-        where: {
-          id: { not: userId },
-          ...(user?.departmentId ? { departmentId: user.departmentId } : {}),
-        },
-        select: {
-          id: true,
-          fullName: true,
-          roles: true,
-          avatarUrl: true,
-          code: true,
-        },
-      });
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { staffProfile: { select: { departmentId: true } } } });
+      return this.prisma.user.findMany({ where: { id: { not: userId }, ...(user?.staffProfile?.departmentId ? { staffProfile: { departmentId: user.staffProfile.departmentId } } : {}) }, select: { id: true, fullName: true, roles: true, avatarUrl: true, code: true } });
     }
-
     const course = await this.prisma.course.findUnique({
       where: { id: courseId },
       include: {
-        teachers: {
-          select: { id: true, fullName: true, roles: true, avatarUrl: true, code: true },
-        },
-        enrollments: {
-          include: {
-            student: {
-              select: { id: true, fullName: true, roles: true, avatarUrl: true, code: true },
-            },
-          },
-        },
+        teachers: { include: { teacher: { select: { id: true, fullName: true, roles: true, avatarUrl: true, code: true } } } },
+        enrollments: { where: { status: 'ACTIVE' }, include: { student: { include: { user: { select: { id: true, fullName: true, roles: true, avatarUrl: true, code: true } } } } } },
+        curriculumItems: { include: { enrollments: { where: { status: 'ACTIVE' }, include: { student: { include: { user: { select: { id: true, fullName: true, roles: true, avatarUrl: true, code: true } } } } } } } },
       },
     });
-
-    if (!course) {
-      return [];
-    }
-
-    if (activeRole === 'STUDENT') {
-      // Contacts = course teachers + other enrolled students (classmates)
-      const teachers = course.teachers.filter((t) => t.id !== userId);
-      const classmates = course.enrollments
-        .map((e) => e.student)
-        .filter((s): s is NonNullable<typeof s> => !!s && s.id !== userId);
-
-      return [...teachers, ...classmates];
-    } else {
-      // For Teachers or Mentors: Contacts = enrolled students
-      const students = course.enrollments
-        .map((e) => e.student)
-        .filter((s): s is NonNullable<typeof s> => !!s && s.id !== userId);
-
-      return students;
-    }
+    if (!course) return [];
+    const teachers = course.teachers.map((assignment) => assignment.teacher).filter((user) => user.id !== userId);
+    const enrolled = [...course.enrollments.map((enrollment) => enrollment.student?.user), ...course.curriculumItems.flatMap((item) => item.enrollments.map((enrollment) => enrollment.student?.user))].filter((user): user is NonNullable<typeof user> => !!user && user.id !== userId);
+    const students = [...new Map(enrolled.map((user) => [user.id, user])).values()];
+    return activeRole === 'STUDENT' ? [...teachers, ...students] : students;
   }
+
 }

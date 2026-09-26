@@ -21,11 +21,7 @@ export class EsisService {
     const students = await this.prisma.user.findMany({
       where: { roles: { has: Role.STUDENT } },
       include: {
-        enrollments: {
-          include: {
-            course: true,
-          },
-        },
+        studentProfile: { include: { enrollments: { include: { standaloneCourse: true, curriculumItem: { include: { course: true } } } } } },
         progressLogs: {
           include: {
             lesson: true,
@@ -54,12 +50,12 @@ export class EsisService {
       const totalTimeSpent = student.progressLogs.reduce((sum, log) => sum + log.timeSpentSec, 0);
 
       // Group competency units
-      const competencies = student.enrollments.map((enr) => ({
-        courseCode: enr.course.code,
-        courseName: enr.course.title,
+      const competencies = (student.studentProfile?.enrollments ?? []).map((enr) => { const course = enr.standaloneCourse || enr.curriculumItem?.course; return course ? {
+        courseCode: course.code,
+        courseName: course.title,
         enrollmentDate: enr.startDate,
         completionStatus: enr.cbtStatus, // COMPETENT, NOT_YET_COMPETENT
-      }));
+      } : null; }).filter(Boolean);
 
       // Gather attendance percentage
       const totalLessonsCount = student.progressLogs.length;

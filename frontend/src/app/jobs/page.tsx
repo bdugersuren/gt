@@ -7,10 +7,12 @@ import { Briefcase, ArrowLeft, MapPin, Landmark, DollarSign, Percent, Award } fr
 interface JobVacancy {
   id: string;
   title: string;
-  companyName: string;
+  company: { id: string; name: string } | null;
+  companyName?: string;
   description: string;
   location: string;
-  salary: string;
+  salaryText?: string;
+  salary?: string;
   requiredSkills: string[];
   matchPercent: number;
 }
@@ -106,7 +108,7 @@ export default function JobsPage() {
                     </h3>
                     <p className="text-xs font-semibold text-slate-500 flex items-center gap-1">
                       <Landmark className="w-3.5 h-3.5" />
-                      <span>{job.companyName}</span>
+                      <span>{job.company?.name || job.companyName || 'Байгууллага'}</span>
                     </p>
                   </div>
 
@@ -119,10 +121,10 @@ export default function JobsPage() {
                       <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
                       <span>{job.location}</span>
                     </div>
-                    {job.salary && (
+                    {(job.salaryText || job.salary) && (
                       <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-950 px-2.5 py-1 rounded-lg">
                         <DollarSign className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        <span>{job.salary}</span>
+                        <span>{job.salaryText || job.salary}</span>
                       </div>
                     )}
                   </div>

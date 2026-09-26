@@ -2,6 +2,10 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 RUN npm i -g pnpm
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_APP_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
 COPY frontend/package.json ./frontend/
 RUN pnpm install --frozen-lockfile --filter=pk-frontend...

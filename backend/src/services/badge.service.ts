@@ -16,11 +16,11 @@ export class BadgeService {
     const enrollment = await this.prisma.enrollment.findFirst({
       where: {
         studentId,
-        courseId,
+        OR: [{ standaloneCourseId: courseId }, { curriculumItem: { courseId } }],
         cbtStatus: 'COMPETENT',
       },
       include: {
-        course: true,
+        standaloneCourse: true, curriculumItem: { include: { course: true } },
       },
     });
 
@@ -47,9 +47,9 @@ export class BadgeService {
       Math.floor(Math.random() * 16).toString(16),
     ).join('');
 
-    const courseTitle = enrollment.course.title;
+    const courseTitle = (enrollment.standaloneCourse || enrollment.curriculumItem?.course)!.title;
     const badgeName = `"${courseTitle}" чадамжийн баталгаажуулсан тэмдэг`;
-    const criteriaMet = `Чадамжийн нэгж: ${enrollment.course.code} - ${courseTitle} сургалтыг бүрэн эзэмшиж чадамжийн үнэлгээ авсан.`;
+    const criteriaMet = `Чадамжийн нэгж: ${(enrollment.standaloneCourse || enrollment.curriculumItem?.course)!.code} - ${courseTitle} сургалтыг бүрэн эзэмшиж чадамжийн үнэлгээ авсан.`;
 
     // 4. Create badge record
     const badge = await this.prisma.skillBadge.create({

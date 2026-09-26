@@ -10,7 +10,7 @@ export class DepartmentsService {
     return this.prisma.department.findMany({
       include: {
         _count: {
-          select: { users: true, courses: true, classes: true },
+          select: { staffProfiles: true, courses: true, classGroups: true },
         },
       },
     });
@@ -21,11 +21,11 @@ export class DepartmentsService {
     const dept = await this.prisma.department.findUnique({
       where: { id },
       include: {
-        classes: true,
+        classGroups: true,
         courses: {
           include: {
             teachers: {
-              select: { id: true, fullName: true, email: true },
+              include: { teacher: { select: { id: true, fullName: true, email: true } } },
             },
           },
         },
@@ -55,5 +55,26 @@ export class DepartmentsService {
         code: data.code.toUpperCase(),
       },
     });
+  }
+  async update(id: string, data: { name?: string; code?: string }) {
+    const current = await this.prisma.department.findUnique({ where: { id } });
+    if (!current) throw new NotFoundException('Тэнхим олдсонгүй');
+    const code = data.code?.toUpperCase();
+    if (code && code !== current.code && await this.prisma.department.findUnique({ where: { code } })) throw new ConflictException('Ийм кодтой тэнхим аль хэдийн байна');
+    return this.prisma.department.update({ where: { id }, data: { name: data.name, code } });
+  }
+
+  async archive(id: string) {
+    const current = await this.prisma.department.findUnique({ where: { id } });
+    if (!current) throw new NotFoundException('Тэнхим олдсонгүй');
+    return this.prisma.department.update({ where: { id }, data: { status: 'ARCHIVED' } });
+  }
+
+  async remove(id: string) {
+    const current = await this.prisma.department.findUnique({ where: { id }, include: { _count: { select: { staffProfiles: true, courses: true, classGroups: true } } } });
+    if (!current) throw new NotFoundException('Тэнхим олдсонгүй');
+    if (current._count.staffProfiles + current._count.courses + current._count.classGroups > 0) throw new ConflictException('Холбоотой өгөгдөлтэй тэнхимийг устгах боломжгүй. Архивлана уу.');
+    await this.prisma.department.delete({ where: { id } });
+    return { deleted: true, id };
   }
 }

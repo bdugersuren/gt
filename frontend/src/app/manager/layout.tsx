@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import {
   BookOpen, Users, LogOut, UserPlus,
-  Menu, X, ShieldAlert, BarChart3, Bell, Compass, AlertTriangle, Upload
+  Menu, X, ShieldAlert, BarChart3, Bell, Compass, AlertTriangle, Upload, Settings2
 } from 'lucide-react';
 
 interface ManagerUser { fullName: string; code?: string; roles: string[] }
@@ -118,10 +118,14 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
           <nav className="p-4 space-y-1">
             {[
               { href: '/manager', label: 'Хянах самбар', icon: BarChart3 },
+              { href: '/manager/library', label: 'Цахим номын сан', icon: BookOpen },
               { href: '/manager/courses', label: 'Курсын удирдлага', icon: BookOpen },
               { href: '/manager/enrollments', label: 'Суралцагч бүртгэх', icon: UserPlus },
               { href: '/manager/users/import', label: 'Excel импорт', icon: Upload },
-              { href: '/manager/announcements', label: 'Зарлан мэдээлэл', icon: Bell },
+              { href: '/manager/setup', label: 'Тохиргооны тойм', icon: Settings2 },
+              { href: '/manager/departments', label: 'Тэнхим', icon: Settings2 },
+              { href: '/manager/classes', label: 'Анги / бүлэг', icon: Settings2 },
+              { href: '/manager/announcements', label: 'Мэдээ мэдээлэл', icon: Bell },
               { href: '/manager/risks', label: 'Явц ба эрсдэл', icon: AlertTriangle },
             ].map(({ href, label, icon: Icon }) => {
               const active = pathname === href || (href !== '/manager' && pathname.startsWith(href));

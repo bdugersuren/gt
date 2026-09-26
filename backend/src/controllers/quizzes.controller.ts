@@ -59,10 +59,16 @@ export class QuizzesController {
     return this.quizzesService.createQuiz(createQuizDto);
   }
 
+  @Get(':id/my-attempts')
+  @Roles(Role.STUDENT)
+  async getMyAttempts(@Param('id') id: string, @Request() req: any) {
+    return this.quizzesService.getMyAttempts(id, req.user.id);
+  }
+
   // GET endpoint to view a quiz (Hides correct answers for students)
   @Get(':id')
   async findOne(@Param('id') id: string, @Request() req: any) {
-    return this.quizzesService.findOne(id, req.user.role);
+    return this.quizzesService.findOne(id, req.user.roles || (req.user.role ? [req.user.role] : []));
   }
 
   // PATCH endpoint to update a quiz (Restricted to Teachers)
@@ -100,6 +106,6 @@ export class QuizzesController {
     @Body() submitAttemptDto: SubmitAttemptDto,
     @Request() req: any,
   ) {
-    return this.quizzesService.submitAttempt(id, req.user.id, submitAttemptDto.answersJson);
+    return this.quizzesService.submitAttempt(id, req.user.id, submitAttemptDto.answers || submitAttemptDto.answersJson || []);
   }
 }

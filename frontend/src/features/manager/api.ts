@@ -39,7 +39,7 @@ export interface DropoutRisk extends Student {
 
 export type EnrollmentStatus = 'ACTIVE' | 'COMPLETED' | 'FAILED';
 export interface CourseEnrollment {
-  id: string; studentId: string; startDate: string; endDate: string; status: EnrollmentStatus;
+  id: string; studentId: string; source?: 'CURRICULUM' | 'STANDALONE' | 'CLASS_BATCH'; startDate: string; endDate?: string | null; status: EnrollmentStatus;
   statusReason?: string; cbtStatus: string;
   student: Student & { email?: string; classGroup?: { id: string; name: string; code: string } };
   progress: { completedLessons: number; totalLessons: number; percent: number };

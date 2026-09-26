@@ -49,8 +49,6 @@ export class LessonsService {
         order: data.order,
         contentType: data.contentType,
         contentBody: data.contentBody,
-        videoUrl: data.videoUrl,
-        pdfUrl: data.pdfUrl,
         moduleId: data.moduleId,
       },
     });
@@ -157,6 +155,7 @@ export class LessonsService {
     const lesson = await this.prisma.lesson.findUnique({
       where: { id: lessonId },
       include: {
+        module: { select: { courseId: true } },
         prerequisites: {
           include: {
             prerequisite: {
@@ -172,6 +171,16 @@ export class LessonsService {
     }
 
     if (roles.includes(Role.STUDENT)) {
+      const enrollment = await this.prisma.enrollment.findFirst({
+        where: {
+          studentId: userId,
+          status: 'ACTIVE',
+          startDate: { lte: new Date() },
+          OR: [{ endDate: null }, { endDate: { gte: new Date() } }],
+          AND: [{ OR: [{ standaloneCourseId: lesson.module.courseId }, { curriculumItem: { courseId: lesson.module.courseId } }] }],
+        },
+      });
+      if (!enrollment) throw new ForbiddenException('Та энэ курст идэвхтэй бүртгэлгүй байна');
       const allowed = await this.checkPrerequisites(lessonId, userId);
       if (!allowed) {
         throw new ForbiddenException(
@@ -204,11 +213,24 @@ export class LessonsService {
   async completeLesson(lessonId: string, studentId: string) {
     const lesson = await this.prisma.lesson.findUnique({
       where: { id: lessonId },
+      include: { module: { select: { courseId: true } } },
     });
 
     if (!lesson) {
       throw new NotFoundException('Лекц олдсонгүй');
     }
+
+    const enrollment = await this.prisma.enrollment.findFirst({
+      where: {
+        studentId,
+        status: 'ACTIVE',
+        startDate: { lte: new Date() },
+        OR: [{ endDate: null }, { endDate: { gte: new Date() } }],
+        AND: [{ OR: [{ standaloneCourseId: lesson.module.courseId }, { curriculumItem: { courseId: lesson.module.courseId } }] }],
+      },
+      include: { standaloneCourse: true, curriculumItem: true },
+    });
+    if (!enrollment) throw new ForbiddenException('Та энэ курст идэвхтэй бүртгэлгүй байна');
 
     // Verify prerequisites before allowing completion just in case of bypass
     const allowed = await this.checkPrerequisites(lessonId, studentId);
@@ -231,6 +253,44 @@ export class LessonsService {
         lessonId,
         completed: true,
         timeSpentSec: 0,
+        lastAccess: new Date(),
+      },
+    });
+  }
+
+  async updateProgress(lessonId: string, studentId: string, data: { timeSpentSec?: number; completed?: boolean }) {
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      select: { id: true, module: { select: { courseId: true } } },
+    });
+    if (!lesson) throw new NotFoundException('Лекц олдсонгүй');
+    const enrollment = await this.prisma.enrollment.findFirst({
+      where: {
+        studentId,
+        status: 'ACTIVE',
+        startDate: { lte: new Date() },
+        OR: [{ endDate: null }, { endDate: { gte: new Date() } }],
+        AND: [{ OR: [{ standaloneCourseId: lesson.module.courseId }, { curriculumItem: { courseId: lesson.module.courseId } }] }],
+      },
+    });
+    if (!enrollment) throw new ForbiddenException('Та энэ курст идэвхтэй бүртгэлгүй байна');
+    if (data.completed) {
+      const allowed = await this.checkPrerequisites(lessonId, studentId);
+      if (!allowed) throw new ForbiddenException('Урьдчилсан нөхцөл биелээгүй байна');
+    }
+    return this.prisma.progressLog.upsert({
+      where: { studentId_lessonId: { studentId, lessonId } },
+      update: {
+        ...(data.timeSpentSec !== undefined ? { timeSpentSec: Math.max(0, Math.floor(data.timeSpentSec)) } : {}),
+        ...(data.completed !== undefined ? { completed: data.completed, ...(data.completed ? { completedAt: new Date() } : {}) } : {}),
+        lastAccess: new Date(),
+      },
+      create: {
+        studentId,
+        lessonId,
+        timeSpentSec: Math.max(0, Math.floor(data.timeSpentSec || 0)),
+        completed: Boolean(data.completed),
+        completedAt: data.completed ? new Date() : null,
         lastAccess: new Date(),
       },
     });

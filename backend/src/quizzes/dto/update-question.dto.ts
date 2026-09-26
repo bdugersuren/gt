@@ -1,5 +1,8 @@
-import { IsString, IsOptional, IsNumber, Min, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsNumber, Min, IsEnum, IsArray, ValidateNested, IsBoolean, IsInt } from 'class-validator';
+import { Type } from 'class-transformer';
 import { QuestionType } from '@prisma/client';
+
+class UpdateOptionDto { @IsString() value!: string; @IsString() @IsOptional() matchValue?: string; @IsBoolean() @IsOptional() isCorrect?: boolean; @IsInt() @IsOptional() order?: number; }
 
 export class UpdateQuestionDto {
   @IsString()
@@ -10,12 +13,13 @@ export class UpdateQuestionDto {
   @IsOptional()
   type?: QuestionType;
 
-  @IsOptional()
-  optionsJson?: any;
+  @IsArray() @ValidateNested({ each: true }) @Type(() => UpdateOptionDto) @IsOptional()
+  options?: UpdateOptionDto[];
 
-  @IsString()
-  @IsOptional()
-  correctAnswer?: string;
+  /** @deprecated Use options. */
+  @IsOptional() optionsJson?: any;
+  /** @deprecated Use options[].isCorrect. */
+  @IsString() @IsOptional() correctAnswer?: string;
 
   @IsString()
   @IsOptional()

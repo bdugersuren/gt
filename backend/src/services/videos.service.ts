@@ -113,26 +113,30 @@ export class VideosService {
       throw new BadRequestException('Амжилттай хөрвүүлэлтэд HLS хаяг заавал байх ёстой');
     }
 
-    // 1. If associated with a Lesson (Teacher lecture video)
-    if (data.lessonId) {
-      await this.prisma.lesson.update({
-        where: { id: data.lessonId },
-        data: {
-          videoUrl: data.hlsStreamUrl,
-        },
+    const objectKey = data.hlsStreamUrl.split('/').slice(-3).join('/') || `hls/${randomUUID()}/master.m3u8`;
+    const makeAsset = async (uploaderId: string, lessonId?: string, courseId?: string) =>
+      this.prisma.mediaAsset.upsert({
+        where: { objectKey },
+        create: { bucketName: this.bucketName, objectKey, publicUrl: data.hlsStreamUrl, hlsUrl: data.hlsStreamUrl, type: 'VIDEO_HLS', originalName: objectKey.split('/').pop() || 'master.m3u8', mimeType: 'application/vnd.apple.mpegurl', sizeBytes: BigInt(0), uploaderId, lessonId, courseId },
+        update: { publicUrl: data.hlsStreamUrl, hlsUrl: data.hlsStreamUrl },
       });
-      console.log(`[Transcode Callback] Lesson ${data.lessonId} videoUrl updated to ${data.hlsStreamUrl}`);
+
+    // Lesson and submission are both represented by normalized MediaAsset relations.
+    if (data.lessonId) {
+      const lesson = await this.prisma.lesson.findUnique({ where: { id: data.lessonId }, include: { module: { include: { course: { include: { teachers: true } } } } } });
+      if (lesson) {
+        const uploaderId = lesson.module.course.teachers[0]?.teacherId || (await this.prisma.user.findFirst({ where: { roles: { has: 'ADMIN' } }, select: { id: true } }))?.id;
+        if (uploaderId) await makeAsset(uploaderId, data.lessonId, lesson.module.courseId);
+      }
     }
 
-    // 2. If associated with a Submission (Student practical video proof)
     if (data.submissionId) {
-      await this.prisma.submission.update({
-        where: { id: data.submissionId },
-        data: {
-          hlsStreamUrl: data.hlsStreamUrl,
-        },
-      });
-      console.log(`[Transcode Callback] Submission ${data.submissionId} hlsStreamUrl updated to ${data.hlsStreamUrl}`);
+      const submission = await this.prisma.submission.findUnique({ where: { id: data.submissionId }, select: { studentId: true, assignment: { select: { lesson: { select: { module: { select: { courseId: true } } } } } } } });
+      if (submission) {
+        const asset = await makeAsset(submission.studentId, undefined, submission.assignment.lesson.module.courseId);
+        await this.prisma.submissionAsset.upsert({ where: { submissionId_assetId: { submissionId: data.submissionId, assetId: asset.id } }, create: { submissionId: data.submissionId, assetId: asset.id }, update: {} });
+        await this.prisma.submission.update({ where: { id: data.submissionId }, data: { linkUrl: data.hlsStreamUrl } });
+      }
     }
 
     return { success: true, message: 'Өгөгдлийн сан амжилттай шинэчлэгдлээ' };

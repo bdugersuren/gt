@@ -8,31 +8,18 @@ export class QuizzesService {
 
   // Create a new question in the course question bank
   async createQuestion(data: {
-    text: string;
-    type: QuestionType;
-    optionsJson: any;
-    correctAnswer: string;
-    explanation?: string;
-    points?: number;
-    courseId: string;
+    text: string; type: QuestionType; options?: Array<{ value: string; matchValue?: string; isCorrect?: boolean; order?: number }>;
+    optionsJson?: any; correctAnswer?: string; explanation?: string; points?: number; courseId: string;
   }) {
-    const course = await this.prisma.course.findUnique({
-      where: { id: data.courseId },
-    });
-    if (!course) {
-      throw new NotFoundException('Хичээл олдсонгүй');
-    }
-
+    if (!(await this.prisma.course.findUnique({ where: { id: data.courseId }, select: { id: true } }))) throw new NotFoundException('Хичээл олдсонгүй');
+    const legacyOptions = Array.isArray(data.optionsJson) ? data.optionsJson : [];
+    const options = data.options?.length ? data.options : legacyOptions.map((item: any, index: number) => ({ value: typeof item === 'string' ? item : String(item.value ?? item.text ?? ''), isCorrect: typeof item === 'object' ? Boolean(item.isCorrect) : data.correctAnswer === item, order: index + 1 }));
     return this.prisma.question.create({
       data: {
-        text: data.text,
-        type: data.type,
-        optionsJson: data.optionsJson,
-        correctAnswer: data.correctAnswer,
-        explanation: data.explanation,
-        points: data.points ?? 1.0,
-        courseId: data.courseId,
+        text: data.text, type: data.type, explanation: data.explanation, points: data.points ?? 1, courseId: data.courseId,
+        options: options.length ? { create: options.map((option, index) => ({ value: option.value, matchValue: option.matchValue, isCorrect: Boolean(option.isCorrect), order: option.order ?? index + 1 })) } : undefined,
       },
+      include: { options: { orderBy: { order: 'asc' } } },
     });
   }
 
@@ -92,129 +79,52 @@ export class QuizzesService {
 
   // Find quiz details (scrubbing correct answers for student users)
   async findOne(quizId: string, roles: Role[]) {
-    const quiz = await this.prisma.quiz.findUnique({
-      where: { id: quizId },
-      include: {
-        quizQuestions: {
-          include: {
-            question: true,
-          },
-          orderBy: { order: 'asc' },
-        },
-      },
-    });
-
-    if (!quiz) {
-      throw new NotFoundException('Тест олдсонгүй');
-    }
-
-    // Security: Remove correct answers and explanations for students viewing the quiz
-    if (roles.includes(Role.STUDENT)) {
-      const sanitizedQuestions = quiz.quizQuestions.map((qq) => {
-        const { correctAnswer, explanation, ...rest } = qq.question;
-        return {
-          ...qq,
-          question: rest,
-        };
-      });
-
-      return {
-        ...quiz,
-        quizQuestions: sanitizedQuestions,
-      };
-    }
-
-    return quiz;
+    const quiz = await this.prisma.quiz.findUnique({ where: { id: quizId }, include: { lesson: { include: { module: { select: { courseId: true } } } }, quizQuestions: { include: { question: { include: { options: { orderBy: { order: 'asc' } } } } }, orderBy: { order: 'asc' } } } });
+    if (!quiz) throw new NotFoundException('Тест олдсонгүй');
+    if (!roles.includes(Role.STUDENT)) return quiz;
+    return { ...quiz, quizQuestions: quiz.quizQuestions.map((qq) => ({ ...qq, question: { ...qq.question, options: qq.question.options.map(({ isCorrect: _isCorrect, ...option }) => option) } })) };
   }
 
   // Grade student quiz attempt automatically
-  async submitAttempt(
-    quizId: string,
-    studentId: string,
-    answersJson: Record<string, string>,
-  ) {
-    const quiz = await this.prisma.quiz.findUnique({
-      where: { id: quizId },
-      include: {
-        quizQuestions: {
-          include: {
-            question: true,
-          },
-        },
-      },
-    });
-
-    if (!quiz) {
-      throw new NotFoundException('Тест олдсонгүй');
-    }
-
-    let scoreEarned = 0;
-    let totalMaxPoints = 0;
-    const gradingDetails: Array<{
-      questionId: string;
-      text: string;
-      studentAnswer: string;
-      correctAnswer: string;
-      isCorrect: boolean;
-      pointsEarned: number;
-    }> = [];
-
-    // Evaluate each question
-    for (const qq of quiz.quizQuestions) {
-      const question = qq.question;
-      const studentAnswer = (answersJson[question.id] || '').trim();
-      const correctAnswer = question.correctAnswer.trim();
-      
-      let isCorrect = false;
-
-      if (question.type === QuestionType.SHORT_ANSWER) {
-        // Case-insensitive matching for short text answers
-        isCorrect = studentAnswer.toLowerCase() === correctAnswer.toLowerCase();
-      } else {
-        // Exact matching for MCQ, True/False, Matching
-        isCorrect = studentAnswer === correctAnswer;
-      }
-
-      const pointsEarned = isCorrect ? question.points : 0;
-      scoreEarned += pointsEarned;
-      totalMaxPoints += question.points;
-
-      gradingDetails.push({
-        questionId: question.id,
-        text: question.text,
-        studentAnswer,
-        correctAnswer,
-        isCorrect,
-        pointsEarned,
-      });
-    }
-
-    // Calculate score percentage (out of 100)
-    const scorePercentage = totalMaxPoints > 0 ? (scoreEarned / totalMaxPoints) * 100 : 0;
-    const passed = scorePercentage >= quiz.passScore;
-    const cbtResult = passed ? CBTStatus.COMPETENT : CBTStatus.NOT_YET_COMPETENT;
-
-    // Create the QuizAttempt log
-    const attempt = await this.prisma.quizAttempt.create({
-      data: {
-        quizId,
+  async submitAttempt(quizId: string, studentId: string, answers: Array<{ questionId: string; answerText?: string; selectedOptionIds?: string[] }> | Record<string, string>) {
+    const quiz = await this.prisma.quiz.findUnique({ where: { id: quizId }, include: { lesson: { include: { module: { select: { courseId: true } } } }, quizQuestions: { include: { question: { include: { options: true } } } } } });
+    if (!quiz) throw new NotFoundException('Тест олдсонгүй');
+    const enrollment = await this.prisma.enrollment.findFirst({
+      where: {
         studentId,
-        score: scorePercentage,
-        passed,
-        cbtResult,
-        answersJson: answersJson as any,
+        status: 'ACTIVE',
+        startDate: { lte: new Date() },
+        OR: [{ endDate: null }, { endDate: { gte: new Date() } }],
+        AND: [{ OR: [{ standaloneCourseId: quiz.lesson.module.courseId }, { curriculumItem: { courseId: quiz.lesson.module.courseId } }] }],
       },
     });
-
-    return {
-      attemptId: attempt.id,
-      score: scorePercentage,
-      passed,
-      cbtResult,
-      gradingDetails,
-      startedAt: attempt.startedAt,
-      completedAt: attempt.completedAt,
-    };
+    if (!enrollment) throw new BadRequestException('Та энэ курст идэвхтэй бүртгэлгүй байна');
+    const attemptNo = (await this.prisma.quizAttempt.count({ where: { quizId, studentId } })) + 1;
+    if (quiz.maxAttempts && attemptNo > quiz.maxAttempts) throw new BadRequestException('Тест өгөх оролдлогын дээд хязгаарт хүрсэн байна');
+    const answerRows: Array<{ questionId: string; answerText?: string; selectedOptionIds?: string[] }> = Array.isArray(answers) ? answers : Object.entries(answers).map(([questionId, answerText]) => ({ questionId, answerText }));
+    let scoreEarned = 0; let totalMaxPoints = 0;
+    const gradingDetails: Array<{ questionId: string; text: string; studentAnswer: string; correctAnswer: string; isCorrect: boolean; pointsEarned: number }> = [];
+    const evaluated = quiz.quizQuestions.map(({ question }) => {
+      const input = answerRows.find((row) => row.questionId === question.id);
+      const selectedIds = input?.selectedOptionIds ?? [];
+      const selectedValues = selectedIds.length ? question.options.filter((option) => selectedIds.includes(option.id)).map((option) => option.value) : input?.answerText ? [input.answerText.trim()] : [];
+      const correctValues = question.options.filter((option) => option.isCorrect).map((option) => option.value);
+      const normalized = (values: string[]) => values.map((value) => value.trim().toLowerCase()).sort();
+      const isCorrect = normalized(selectedValues).join('|') === normalized(correctValues).join('|') && correctValues.length > 0;
+      const pointsEarned = isCorrect ? question.points : 0;
+      scoreEarned += pointsEarned; totalMaxPoints += question.points;
+      const studentAnswer = selectedValues.join(', '); const correctAnswer = correctValues.join(', ');
+      gradingDetails.push({ questionId: question.id, text: question.text, studentAnswer, correctAnswer, isCorrect, pointsEarned });
+      return { questionId: question.id, answerText: studentAnswer || null, answerJson: selectedIds.length ? selectedIds : undefined, isCorrect, scoreEarned: pointsEarned };
+    });
+    const scorePercentage = totalMaxPoints > 0 ? (scoreEarned / totalMaxPoints) * 100 : 0;
+    const passed = scorePercentage >= quiz.passScore; const cbtResult = passed ? CBTStatus.COMPETENT : CBTStatus.NOT_YET_COMPETENT;
+    const attempt = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.quizAttempt.create({ data: { quizId, studentId, attemptNo, score: scorePercentage, passed, cbtResult, completedAt: new Date() } });
+      await tx.quizAnswer.createMany({ data: evaluated.map((answer) => ({ ...answer, attemptId: created.id, studentId })) });
+      return created;
+    });
+    return { attemptId: attempt.id, score: scorePercentage, passed, cbtResult, gradingDetails, startedAt: attempt.startedAt, completedAt: attempt.completedAt };
   }
 
   // Get all questions in the question bank of a course
@@ -226,17 +136,19 @@ export class QuizzesService {
   }
 
   // Update a question in the question bank
-  async updateQuestion(id: string, data: {
-    text?: string;
-    type?: any;
-    optionsJson?: any;
-    correctAnswer?: string;
-    explanation?: string;
-    points?: number;
-  }) {
+  async updateQuestion(id: string, data: { text?: string; type?: QuestionType; options?: Array<{ value: string; matchValue?: string; isCorrect?: boolean; order?: number }>; optionsJson?: any; correctAnswer?: string; explanation?: string; points?: number }) {
     const question = await this.prisma.question.findUnique({ where: { id } });
     if (!question) throw new NotFoundException('Асуулт олдсонгүй');
-    return this.prisma.question.update({ where: { id }, data });
+    const legacyOptions = Array.isArray(data.optionsJson) ? data.optionsJson : [];
+    const options = data.options ?? legacyOptions.map((item: any, index: number) => ({ value: typeof item === 'string' ? item : String(item.value ?? item.text ?? ''), isCorrect: typeof item === 'object' ? Boolean(item.isCorrect) : data.correctAnswer === item, order: index + 1 }));
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.question.update({ where: { id }, data: { text: data.text, type: data.type, explanation: data.explanation, points: data.points } });
+      if (options.length) {
+        await tx.questionOption.deleteMany({ where: { questionId: id } });
+        await tx.questionOption.createMany({ data: options.map((option, index) => ({ questionId: id, value: option.value, matchValue: option.matchValue, isCorrect: Boolean(option.isCorrect), order: option.order ?? index + 1 })) });
+      }
+      return tx.question.findUnique({ where: { id: updated.id }, include: { options: { orderBy: { order: 'asc' } } } });
+    });
   }
 
   // Delete a question from the question bank
@@ -315,7 +227,7 @@ export class QuizzesService {
     const totalAttempts = attempts.length;
     const passed = attempts.filter((a) => a.passed).length;
     const avgScore = totalAttempts > 0
-      ? attempts.reduce((sum, a) => sum + a.score, 0) / totalAttempts
+      ? attempts.reduce((sum, a) => sum + (a.score ?? 0), 0) / totalAttempts
       : 0;
 
     return {
@@ -328,7 +240,7 @@ export class QuizzesService {
       attempts: attempts.map((a) => ({
         id: a.id,
         student: a.student,
-        score: Math.round(a.score * 10) / 10,
+        score: Math.round((a.score ?? 0) * 10) / 10,
         passed: a.passed,
         cbtResult: a.cbtResult,
         startedAt: a.startedAt,
@@ -336,5 +248,27 @@ export class QuizzesService {
       })),
     };
   }
+
+  async getMyAttempts(quizId: string, studentId: string) {
+    const quiz = await this.prisma.quiz.findUnique({ where: { id: quizId }, select: { id: true, maxAttempts: true, lesson: { select: { module: { select: { courseId: true } } } } } });
+    if (!quiz) throw new NotFoundException('Тест олдсонгүй');
+    const enrollment = await this.prisma.enrollment.findFirst({
+      where: {
+        studentId,
+        status: 'ACTIVE',
+        startDate: { lte: new Date() },
+        OR: [{ endDate: null }, { endDate: { gte: new Date() } }],
+        AND: [{ OR: [{ standaloneCourseId: quiz.lesson.module.courseId }, { curriculumItem: { courseId: quiz.lesson.module.courseId } }] }],
+      },
+    });
+    if (!enrollment) throw new BadRequestException('Та энэ курст идэвхтэй бүртгэлгүй байна');
+    const attempts = await this.prisma.quizAttempt.findMany({
+      where: { quizId, studentId },
+      include: { answers: true },
+      orderBy: { attemptNo: 'desc' },
+    });
+    return { maxAttempts: quiz.maxAttempts, remainingAttempts: quiz.maxAttempts ? Math.max(0, quiz.maxAttempts - attempts.length) : null, attempts };
+  }
+
 }
 

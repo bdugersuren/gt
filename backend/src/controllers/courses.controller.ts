@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Request, UseInterceptors } from '@nestjs/common';
 import { CoursesService } from '../services/courses.service';
 import { CreateCourseDto } from '../courses/dto/create-course.dto';
+import { UpdateCourseDto } from '../courses/dto/update-course.dto';
 import { EnrollCourseDto } from '../courses/dto/enroll-course.dto';
 import { UpdateCourseTeachersDto } from '../courses/dto/update-course-teachers.dto';
 import { BulkEnrollCourseDto } from '../courses/dto/bulk-enroll-course.dto';
@@ -48,13 +49,29 @@ export class CoursesController {
     return this.coursesService.getStudentGrades(id, req.user.id);
   }
 
-  // Create a new course (Restricted to Managers)
+  // Create a new course
   @Post()
-  @Roles(Role.MANAGER)
+  @Roles(Role.ADMIN, Role.MANAGER)
   @AuditLogAction('COURSE_CREATE')
   @UseInterceptors(AuditLogInterceptor)
   async create(@Body() createCourseDto: CreateCourseDto) {
     return this.coursesService.create(createCourseDto);
+  }
+
+  @Patch(':id')
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @AuditLogAction('COURSE_UPDATE')
+  @UseInterceptors(AuditLogInterceptor)
+  async update(@Param('id') id: string, @Body() dto: UpdateCourseDto) {
+    return this.coursesService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @AuditLogAction('COURSE_DELETE')
+  @UseInterceptors(AuditLogInterceptor)
+  async remove(@Param('id') id: string) {
+    return this.coursesService.remove(id);
   }
 
   @Get(':id/enrollments')
@@ -112,11 +129,13 @@ export class CoursesController {
     @Body() enrollCourseDto: EnrollCourseDto,
   ) {
     return this.coursesService.enroll(id, {
+      source: enrollCourseDto.source,
       type: enrollCourseDto.type,
       studentId: enrollCourseDto.studentId,
       classGroupId: enrollCourseDto.classGroupId,
+      curriculumItemId: enrollCourseDto.curriculumItemId,
       startDate: new Date(enrollCourseDto.startDate),
-      endDate: new Date(enrollCourseDto.endDate),
+      endDate: enrollCourseDto.endDate ? new Date(enrollCourseDto.endDate) : undefined,
     });
   }
 }

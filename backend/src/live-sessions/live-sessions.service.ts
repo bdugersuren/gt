@@ -26,11 +26,11 @@ export class LiveSessionsService {
   }) {
     const course = await this.prisma.course.findUnique({
       where: { id: data.courseId },
-      include: { teachers: { select: { id: true } } },
+      include: { teachers: { select: { teacherId: true } } },
     });
     if (!course) throw new NotFoundException('Курс олдсонгүй');
 
-    const isTeacher = course.teachers.some((t) => t.id === teacherId);
+    const isTeacher = course.teachers.some((assignment) => assignment.teacherId === teacherId);
     if (!isTeacher) throw new ForbiddenException('Та энэ курст хичээл заах эрхгүй байна');
 
     const sessionCode = await this.generateUniqueCode();
@@ -179,77 +179,40 @@ export class LiveSessionsService {
     });
 
     return this.prisma.livePoll.create({
-      data: {
-        sessionId,
-        question: data.question,
-        options: data.options,
-        responses: {},
-        isActive: true,
-      },
+      data: { sessionId, question: data.question, isActive: true, options: { create: data.options.map((text, order) => ({ text, order })) } },
+      include: { options: { orderBy: { order: 'asc' } } },
     });
   }
 
   // Submit a poll answer (Student)
   async submitPollAnswer(pollId: string, studentId: string, optionIndex: number) {
-    const poll = await this.prisma.livePoll.findUnique({ where: { id: pollId } });
+    const poll = await this.prisma.livePoll.findUnique({ where: { id: pollId }, include: { options: { orderBy: { order: 'asc' } } } });
     if (!poll) throw new NotFoundException('Санал асуулга олдсонгүй');
     if (!poll.isActive) throw new BadRequestException('Санал асуулга хаагдсан байна');
-    const options = poll.options as string[];
-    if (optionIndex < 0 || optionIndex >= options.length) {
-      throw new BadRequestException('Хүчингүй сонголтын дугаар');
-    }
-
-    const responses = (poll.responses as Record<string, number>) || {};
-    responses[studentId] = optionIndex;
-
-    return this.prisma.livePoll.update({
-      where: { id: pollId },
-      data: { responses },
-    });
+    const option = poll.options[optionIndex];
+    if (!option) throw new BadRequestException('Хүчингүй сонголтын дугаар');
+    return this.prisma.livePollResponse.upsert({ where: { pollId_studentId: { pollId, studentId } }, update: { optionId: option.id }, create: { pollId, studentId, optionId: option.id } });
   }
 
   // Get poll results with vote counts
   async getPollResults(pollId: string) {
-    const poll = await this.prisma.livePoll.findUnique({ where: { id: pollId } });
+    const poll = await this.prisma.livePoll.findUnique({ where: { id: pollId }, include: { options: { orderBy: { order: 'asc' }, include: { responses: true } } } });
     if (!poll) throw new NotFoundException('Санал асуулга олдсонгүй');
-
-    const options = poll.options as string[];
-    const responses = (poll.responses as Record<string, number>) || {};
-    const totalVotes = Object.keys(responses).length;
-
-    const results = options.map((opt, idx) => {
-      const votes = Object.values(responses).filter((v) => v === idx).length;
-      return {
-        option: opt,
-        votes,
-        percentage: totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0,
-      };
-    });
-
+    const totalVotes = poll.options.reduce((sum, option) => sum + option.responses.length, 0);
+    const results = poll.options.map((option) => ({ option: option.text, votes: option.responses.length, percentage: totalVotes > 0 ? Math.round((option.responses.length / totalVotes) * 100) : 0 }));
     return { pollId, question: poll.question, totalVotes, results };
   }
 
   private async assertCourseMember(courseId: string, userId: string, roles: Role[]) {
     if (roles.includes(Role.ADMIN) || roles.includes(Role.MANAGER)) return;
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { classGroupId: true } });
     const allowed = await this.prisma.course.count({
       where: {
         id: courseId,
         OR: [
-          { teachers: { some: { id: userId } } },
-          {
-            enrollments: {
-              some: {
-                isActive: true,
-                startDate: { lte: new Date() },
-                endDate: { gte: new Date() },
-                OR: [
-                  { studentId: userId },
-                  ...(user?.classGroupId ? [{ classGroupId: user.classGroupId }] : []),
-                ],
-              },
-            },
-          },
+          { teachers: { some: { teacherId: userId } } },
+          { enrollments: { some: { studentId: userId, status: 'ACTIVE', startDate: { lte: new Date() }, OR: [{ endDate: null }, { endDate: { gte: new Date() } }] } } },
+          { enrollments: { some: { classGroup: { memberships: { some: { studentId: userId, isCurrent: true } } }, status: 'ACTIVE', startDate: { lte: new Date() }, OR: [{ endDate: null }, { endDate: { gte: new Date() } }] } } },
+          { curriculumItems: { some: { enrollments: { some: { studentId: userId, status: 'ACTIVE' } } } } },
         ],
       },
     });

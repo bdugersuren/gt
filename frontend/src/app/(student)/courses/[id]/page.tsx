@@ -91,11 +91,6 @@ export default function CourseDetailsPage() {
 
     setUser(JSON.parse(userData));
 
-    const savedQuizzes = localStorage.getItem('completed_quizzes');
-    if (savedQuizzes) {
-      setCompletedQuizzes(new Set(JSON.parse(savedQuizzes)));
-    }
-
     const fetchCourseDetails = async () => {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
       try {
@@ -109,12 +104,13 @@ export default function CourseDetailsPage() {
 
         const data = await response.json();
 
-        // Load completed lessons from localStorage
-        let completedLessons = new Set<string>();
-        const savedCompletions = localStorage.getItem('completed_lessons');
-        if (savedCompletions) {
-          completedLessons = new Set(JSON.parse(savedCompletions));
-        }
+        const progressResponse = await fetch(apiUrl + '/students/me/progress?courseId=' + courseId, {
+          headers: { 'Authorization': 'Bearer ' + token },
+        });
+        const progressLogs = progressResponse.ok ? await progressResponse.json() : [];
+        const completedLessons = new Set<string>(
+          progressLogs.filter((log: any) => log.completed).map((log: any) => log.lessonId),
+        );
         setCompletedSet(completedLessons);
 
         const enrichedModules = data.modules.map((mod: Module) => {
@@ -287,23 +283,37 @@ export default function CourseDetailsPage() {
   // Load custom notes and gating config on active lesson change
   useEffect(() => {
     if (activeLesson) {
-      const savedNotes = localStorage.getItem(`notes_${activeLesson.id}`);
-      setNotesText(savedNotes || '');
-
-      const savedGating = localStorage.getItem(`gating_${activeLesson.id}`);
-      if (savedGating) {
-        setActiveGatingConfig(JSON.parse(savedGating));
-      } else {
+      const token = localStorage.getItem('token');
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      if (!token) return;
+      Promise.all([
+        fetch(API_URL + '/lessons/' + activeLesson.id + '/notes', { headers: { 'Authorization': 'Bearer ' + token } }),
+        fetch(API_URL + '/lessons/' + activeLesson.id + '/gates', { headers: { 'Authorization': 'Bearer ' + token } }),
+      ]).then(async ([notesResponse, gatesResponse]) => {
+        const note = notesResponse.ok ? await notesResponse.json() : null;
+        const gates = gatesResponse.ok ? await gatesResponse.json() : [];
+        setNotesText(note?.content || '');
+        setActiveGatingConfig({
+          videoLocks: gates.filter((gate: any) => gate.triggerType === 'VIDEO_TIMESTAMP').map((gate: any) => ({ timestamp: gate.triggerValue || 0, quizId: gate.quizId })),
+          pdfLocks: gates.filter((gate: any) => gate.triggerType === 'PDF_PAGE').map((gate: any) => ({ lockPage: gate.triggerValue || 1, quizId: gate.quizId })),
+        });
+      }).catch(() => {
+        setNotesText('');
         setActiveGatingConfig(null);
-      }
+      });
     }
   }, [activeLesson]);
 
-  const saveNotes = () => {
-    if (activeLesson) {
-      localStorage.setItem(`notes_${activeLesson.id}`, notesText);
-      alert('Тэмдэглэл хадгалагдлаа!');
-    }
+  const saveNotes = async () => {
+    if (!activeLesson) return;
+    const token = localStorage.getItem('token');
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const response = await fetch(API_URL + '/lessons/' + activeLesson.id + '/notes', {
+      method: 'PUT',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: notesText }),
+    });
+    alert(response.ok ? 'Тэмдэглэл хадгалагдлаа!' : 'Тэмдэглэл хадгалахад алдаа гарлаа');
   };
 
   const handleLessonSelect = (lesson: Lesson, modIdx: number) => {
@@ -322,7 +332,6 @@ export default function CourseDetailsPage() {
     const newCompleted = new Set(completedQuizzes);
     newCompleted.add(quizId);
     setCompletedQuizzes(newCompleted);
-    localStorage.setItem('completed_quizzes', JSON.stringify(Array.from(newCompleted)));
 
     // Dynamic video lock check
     const currentVideoLocks = activeGatingConfig?.videoLocks || [{ timestamp: 15, quizId: 'quiz-vid-1' }];
@@ -375,13 +384,22 @@ export default function CourseDetailsPage() {
     return () => clearInterval(interval);
   }, [isVideoPlaying, videoLocked, completedQuizzes, activeGatingConfig]);
 
-  const handleCompleteLesson = () => {
+  const handleCompleteLesson = async () => {
     if (!activeLesson || !course) return;
+    const token = localStorage.getItem('token');
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const response = await fetch(API_URL + '/lessons/' + activeLesson.id + '/complete', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) {
+      alert('Хичээл дуусгасан төлөв хадгалагдсангүй');
+      return;
+    }
 
     const newCompleted = new Set(completedSet);
     newCompleted.add(activeLesson.id);
     setCompletedSet(newCompleted);
-    localStorage.setItem('completed_lessons', JSON.stringify(Array.from(newCompleted)));
 
     // Re-enrich modules locking status
     const updatedModules = course.modules.map((mod: Module) => {

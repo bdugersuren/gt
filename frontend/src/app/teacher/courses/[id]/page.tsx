@@ -48,8 +48,9 @@ interface Question {
   text: string;
   type: string;
   points: number;
-  optionsJson: any;
-  correctAnswer: string;
+  options: Array<{ id: string; value: string; isCorrect?: boolean }>;
+  optionsJson?: any;
+  correctAnswer?: string;
   explanation?: string;
   createdAt: string;
 }
@@ -379,18 +380,17 @@ export default function TeacherCourseEditor() {
     if (!newQText.trim()) return;
     const token = getToken();
     setAddingQuestion(true);
-    const optionsJson = newQType === 'MULTIPLE_CHOICE'
-      ? newQOptions.map((opt, i) => ({ label: String.fromCharCode(65 + i), text: opt }))
+    const options = newQType === 'MULTIPLE_CHOICE'
+      ? newQOptions.map((value, i) => ({ value, isCorrect: value === newQCorrect, order: i + 1 }))
       : newQType === 'TRUE_FALSE'
-        ? [{ label: 'Үнэн', text: 'Үнэн' }, { label: 'Худал', text: 'Худал' }]
-        : [];
+        ? [{ value: 'Үнэн', isCorrect: newQCorrect === 'Үнэн', order: 1 }, { value: 'Худал', isCorrect: newQCorrect === 'Худал', order: 2 }]
+        : newQType === 'SHORT_ANSWER' ? [{ value: newQCorrect, isCorrect: true, order: 1 }] : [];
     try {
       const res = await fetch(`${apiUrl}/quizzes/questions`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: newQText.trim(), type: newQType, optionsJson,
-          correctAnswer: newQCorrect, explanation: newQExplanation.trim() || undefined,
+          text: newQText.trim(), type: newQType, options, explanation: newQExplanation.trim() || undefined,
           points: newQPoints, courseId,
         }),
       });
@@ -1337,7 +1337,7 @@ export default function TeacherCourseEditor() {
                     </div>
                     <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-all">
                       <button
-                        onClick={() => { setEditingQuestion(q); setEditQText(q.text); setEditQCorrect(q.correctAnswer); }}
+                        onClick={() => { setEditingQuestion(q); setEditQText(q.text); setEditQCorrect(q.correctAnswer || ''); }}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/20 transition-all"
                         title="Засах"
                       >

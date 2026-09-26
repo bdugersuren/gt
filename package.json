@@ -1,6 +1,7 @@
 {
   "name": "pk-lms-monorepo",
   "private": true,
+  "packageManager": "pnpm@11.25.0",
   "scripts": {
     "typecheck": "pnpm --filter pk-backend exec tsc --noEmit && pnpm --filter pk-frontend exec tsc --noEmit && pnpm --filter pk-transcoder-worker exec tsc --noEmit",
     "build": "pnpm --filter pk-backend build && pnpm --filter pk-frontend build && pnpm --filter pk-transcoder-worker build",
@@ -10,6 +11,6 @@
     "deploy:preflight": "ops/deploy/preflight.sh"
   },
   "dependencies": {
-    "axios": "^1.19.0"
+    "axios": "^1.20.0"
   }
 }

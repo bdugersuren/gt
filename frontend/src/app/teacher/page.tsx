@@ -349,8 +349,8 @@ export default function TeacherDashboard() {
                         </td>
                         <td className="py-3 px-4">
                           <p className="font-bold text-slate-700 dark:text-slate-350">{sub.assignment.title}</p>
-                          {sub.fileUrl && (
-                            <a href={sub.fileUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-orange-500 hover:underline">
+                          {(sub.assets?.[0]?.asset?.publicUrl || sub.linkUrl) && (
+                            <a href={(sub.assets?.[0]?.asset?.publicUrl || sub.linkUrl)} target="_blank" rel="noopener noreferrer" className="text-[10px] text-orange-500 hover:underline">
                               Хавсаргасан файл үзэх
                             </a>
                           )}

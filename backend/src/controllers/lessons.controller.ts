@@ -49,7 +49,19 @@ export class LessonsController {
   // GET endpoint to view lesson details (Checks DAG prerequisites for students)
   @Get('lessons/:id')
   async findOne(@Param('id') id: string, @Request() req: any) {
-    return this.lessonsService.findOne(id, req.user.id, req.user.role);
+    return this.lessonsService.findOne(id, req.user.id, req.user.roles || []);
+  }
+
+  @Post('lessons/:id/access')
+  @Roles(Role.STUDENT)
+  async accessLesson(@Param('id') id: string, @Request() req: any) {
+    return this.lessonsService.findOne(id, req.user.id, req.user.roles || []);
+  }
+
+  @Patch('lessons/:id/progress')
+  @Roles(Role.STUDENT)
+  async updateProgress(@Param('id') id: string, @Body() body: { timeSpentSec?: number; completed?: boolean }, @Request() req: any) {
+    return this.lessonsService.updateProgress(id, req.user.id, body);
   }
 
   // POST endpoint to mark a lesson as completed (Restricted to Students)

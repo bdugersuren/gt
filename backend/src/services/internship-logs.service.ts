@@ -38,7 +38,7 @@ export class InternshipLogsService {
           mentor: {
             select: {
               fullName: true,
-              companyName: true,
+              enterpriseMentorProfile: { select: { company: { select: { id: true, name: true } } } },
             },
           },
         },
@@ -65,7 +65,7 @@ export class InternshipLogsService {
         mentor: {
           select: {
             fullName: true,
-            companyName: true,
+            enterpriseMentorProfile: { select: { company: { select: { id: true, name: true } } } },
           },
         },
       },
@@ -104,7 +104,7 @@ export class InternshipLogsService {
         mentor: {
           select: {
             fullName: true,
-            companyName: true,
+            enterpriseMentorProfile: { select: { company: { select: { id: true, name: true } } } },
           },
         },
       },

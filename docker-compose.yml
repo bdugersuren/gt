@@ -10,7 +10,12 @@ services:
   frontend:
     <<: *default-security
     image: ${FRONTEND_IMAGE:-gt-lms-frontend}:${IMAGE_TAG:-local}
-    build: { context: ., dockerfile: frontend/Dockerfile }
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -56,7 +61,7 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:?}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:?}
     expose: ["5000"]
-    networks: [backend]
+    networks: [backend, edge]
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }

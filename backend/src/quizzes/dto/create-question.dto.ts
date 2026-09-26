@@ -1,5 +1,13 @@
-import { IsNotEmpty, IsString, IsEnum, IsOptional, IsNumber, Min } from 'class-validator';
+import { IsNotEmpty, IsString, IsEnum, IsOptional, IsNumber, Min, IsArray, ValidateNested, IsBoolean, IsInt } from 'class-validator';
+import { Type } from 'class-transformer';
 import { QuestionType } from '@prisma/client';
+
+export class QuestionOptionDto {
+  @IsString() @IsNotEmpty() value!: string;
+  @IsString() @IsOptional() matchValue?: string;
+  @IsBoolean() @IsOptional() isCorrect?: boolean;
+  @IsInt() @IsOptional() order?: number;
+}
 
 export class CreateQuestionDto {
   @IsString()
@@ -10,12 +18,16 @@ export class CreateQuestionDto {
   @IsNotEmpty()
   type!: QuestionType;
 
-  @IsNotEmpty({ message: 'Асуултын сонголтууд (optionsJson) заавал байх ёстой' })
-  optionsJson!: any; // Array of options or option matching pairs
+  @IsArray() @ValidateNested({ each: true }) @Type(() => QuestionOptionDto) @IsOptional()
+  options?: QuestionOptionDto[];
 
-  @IsString()
-  @IsNotEmpty({ message: 'Зөв хариулт хоосон байж болохгүй' })
-  correctAnswer!: string;
+  /** @deprecated Use options. */
+  @IsOptional()
+  optionsJson?: any;
+
+  /** @deprecated Use options[].isCorrect. */
+  @IsString() @IsOptional()
+  correctAnswer?: string;
 
   @IsString()
   @IsOptional()

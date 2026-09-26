@@ -135,7 +135,7 @@ export class LiveSessionsGateway implements OnGatewayConnection, OnGatewayDiscon
       this.server.to(data.sessionId).emit('poll-launched', {
         pollId: poll.id,
         question: poll.question,
-        options: poll.options,
+        options: poll.options.map((option) => option.text),
       });
     } catch (err: any) {
       client.emit('error', { message: err.message });

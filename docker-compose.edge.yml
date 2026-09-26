@@ -1,0 +1,10 @@
+services:
+  backend:
+    networks:
+      - backend
+      - edge
+
+networks:
+  edge:
+    external: true
+    name: shared-net

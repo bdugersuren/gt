@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import {
   GraduationCap, BookOpen, Users, LogOut, ArrowLeft,
-  Menu, X, ShieldAlert, BarChart3, Settings, Bell, Compass, Shield
+  Menu, X, ShieldAlert, BarChart3, Settings, Bell, Compass, Shield, Database
 } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -118,6 +118,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Shield className="w-4 h-4 text-orange-500" />
               <span>Админ самбар (Dashboard)</span>
             </Link>
+
+            {/* <Link href="/admin/setup" className="flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-all"><Settings className="w-4 h-4 text-orange-500" /><span>Тохиргооны тойм</span></Link> */}
+            <Link href="/admin/departments" className="flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-all"><Settings className="w-4 h-4 text-orange-500" /><span>Тэнхим</span></Link>
+            <Link href="/admin/programs" className="flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-all"><BookOpen className="w-4 h-4 text-orange-500" /><span>Сургалтын хөтөлбөр</span></Link>
+            <Link href="/admin/classes" className="flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-all"><Settings className="w-4 h-4 text-orange-500" /><span>Анги / бүлэг</span></Link>
+            <Link href="/admin/users" className="flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-all"><Users className="w-4 h-4 text-orange-500" /><span>Хэрэглэгчид</span></Link>
+            <Link href="/admin/courses" className="flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-all"><BookOpen className="w-4 h-4 text-orange-500" /><span>Курсийн удирдлага</span></Link>
+            
+            <Link href="/admin/programs/courses" className="flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-all"><BookOpen className="w-4 h-3 text-orange-500" /><span>Хөтөлбөрийн хичээл</span></Link>
+            <Link href="/admin/curriculum" className="flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-all"><BookOpen className="w-4 h-4 text-orange-500" /><span>Сургалтын төлөвлөгөө</span></Link>
+            <Link href="/admin/promotions" className="flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-all"><GraduationCap className="w-4 h-4 text-orange-500" /><span>Анги дэвшилт</span></Link>
+            <Link href="/admin/database" className="flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-all"><Database className="w-4 h-4 text-orange-500" /><span>Өгөгдлийн сан</span></Link><Link href="/admin/library" className="flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-all"><BookOpen className="w-4 h-4 text-orange-500" /><span>Цахим номын сан</span></Link>
 
             {user?.roles?.length > 1 && (
               <Link

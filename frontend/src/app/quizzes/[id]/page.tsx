@@ -7,7 +7,7 @@ interface Question {
   id: string;
   text: string;
   type: string;
-  optionsJson: string[];
+  options: Array<{ id: string; value: string }>;
 }
 
 interface QuizDetails {
@@ -107,7 +107,7 @@ export default function QuizAttemptPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          answersJson: answers,
+          answers: Object.entries(answers).map(([questionId, answerText]) => ({ questionId, answerText })),
         }),
       });
 
@@ -274,19 +274,19 @@ export default function QuizAttemptPage() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 gap-3">
-                      {q.optionsJson.map((option) => {
-                        const isSelected = answers[q.id] === option;
+                      {(q.options || []).map((option) => {
+                        const isSelected = answers[q.id] === option.value;
                         return (
                           <button
-                            key={option}
-                            onClick={() => handleSelectOption(q.id, option)}
+                            key={option.id}
+                            onClick={() => handleSelectOption(q.id, option.value)}
                             className={`w-full text-left p-4 rounded-2xl text-xs font-semibold border transition-all duration-150 flex items-center justify-between ${
                               isSelected
                                 ? 'border-teal-500 bg-teal-50/30 text-teal-700 dark:text-teal-400 dark:bg-teal-950/20'
                                 : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 hover:bg-slate-50 dark:bg-slate-950 dark:hover:bg-slate-900'
                             }`}
                           >
-                            <span>{option}</span>
+                            <span>{option.value}</span>
                             {isSelected && <Check className="w-4 h-4 text-teal-500" />}
                           </button>
                         );

@@ -18,7 +18,7 @@ export default function RootLayout({
   return (
     <html lang="mn">
       <head>
-        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" href="/favicon.png" sizes="any" />
       </head>
       <body className="min-h-screen bg-brand-neutral-pearl font-sans antialiased text-brand-neutral-text">
         <OfflineSyncProvider>

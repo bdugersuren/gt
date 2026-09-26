@@ -1,0 +1,3 @@
+ALTER TABLE "User"
+  ADD COLUMN "notificationEmail" BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN "notificationInApp" BOOLEAN NOT NULL DEFAULT true;

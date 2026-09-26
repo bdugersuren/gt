@@ -138,6 +138,15 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
               );
             })}
 
+            <Link
+              href="/teacher/library"
+              onClick={() => setSidebarOpen(false)}
+              className="flex items-center gap-3 p-3 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800 transition-all"
+            >
+              <BookOpen className="w-4 h-4 text-orange-500" />
+              <span>Цахим номын сан</span>
+            </Link>
+
             {/* Live Session shortcut */}
             <div className="pt-2 border-t border-slate-800/60 mt-2">
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-3 pb-1.5">Live хичээл</p>

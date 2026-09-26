@@ -1,10 +1,15 @@
-import { IsNotEmpty, IsEnum, IsOptional, IsString, IsDateString } from 'class-validator';
-import { EnrollmentType } from '@prisma/client';
+import { IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { EnrollmentSource } from '@prisma/client';
 
 export class EnrollCourseDto {
-  @IsEnum(EnrollmentType, { message: 'Бүртгэлийн төрөл буруу байна (INDIVIDUAL эсвэл CLASS_BATCH)' })
-  @IsNotEmpty()
-  type!: EnrollmentType;
+  @IsEnum(EnrollmentSource, { message: 'Бүртгэлийн source буруу байна' })
+  @IsOptional()
+  source?: EnrollmentSource;
+
+  /** @deprecated Use source. */
+  @IsOptional()
+  @IsString()
+  type?: string;
 
   @IsString()
   @IsOptional()
@@ -14,11 +19,15 @@ export class EnrollCourseDto {
   @IsOptional()
   classGroupId?: string;
 
+  @IsString()
+  @IsOptional()
+  curriculumItemId?: string;
+
   @IsDateString({}, { message: 'Эхлэх огноо зөв DateString байх ёстой' })
   @IsNotEmpty()
   startDate!: string;
 
   @IsDateString({}, { message: 'Дуусах огноо зөв DateString байх ёстой' })
-  @IsNotEmpty()
-  endDate!: string;
+  @IsOptional()
+  endDate?: string;
 }

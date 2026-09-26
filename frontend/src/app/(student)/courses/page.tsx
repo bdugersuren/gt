@@ -17,6 +17,8 @@ interface Course {
   description: string;
   coverImage?: string;
   teacher?: { fullName: string };
+  teachers?: { fullName: string }[];
+  progressPercent?: number;
 }
 
 // Simple mini-calendar component
@@ -148,7 +150,14 @@ export default function CoursesPage() {
           setCourses(coursesData);
         }
 
-        if (parsedUser.role === 'STUDENT') {
+        if (parsedUser.roles?.includes('STUDENT')) {
+          const dashboardRes = await fetch(apiUrl + '/students/me/dashboard', {
+            headers: { 'Authorization': 'Bearer ' + token },
+          });
+          if (dashboardRes.ok) {
+            const dashboard = await dashboardRes.json();
+            setCourses(dashboard.courses || []);
+          }
           const compRes = await fetch(`${apiUrl}/users/profile/competency`, {
             headers: { 'Authorization': `Bearer ${token}` },
           });
@@ -164,7 +173,7 @@ export default function CoursesPage() {
             const statsData = await statsRes.json();
             setGameStats(statsData);
           }
-        } else if (parsedUser.role === 'MANAGER' || parsedUser.role === 'ADMIN') {
+        } else if (parsedUser.roles?.includes('MANAGER') || parsedUser.roles?.includes('ADMIN')) {
           const dropoutRes = await fetch(`${apiUrl}/users/students/dropout-risk`, {
             headers: { 'Authorization': `Bearer ${token}` },
           });
@@ -234,6 +243,7 @@ export default function CoursesPage() {
     { icon: Beaker, label: 'Практик лабораторь', href: '/lab' },
     { icon: BarChart3, label: 'Дүнгүүд', href: '/grades' },
     { icon: ClipboardList, label: 'Дадлагын бүртгэл', href: '/internship-logs' },
+    { icon: BookOpen, label: 'Цахим номын сан', href: '/library' },
     { icon: Settings, label: 'Тохиргоо', href: '/settings' },
   ];
 
@@ -250,9 +260,9 @@ export default function CoursesPage() {
   const featuredCourse = courses.length > 0 ? courses[0] : null;
 
   const tabs = [
-    { key: 'enrolled', label: 'Суралцаж байгаа', count: courses.length },
-    { key: 'upcoming', label: 'Удахгүй нээгдэх', count: 2 },
-    { key: 'completed', label: 'Судалсан', count: 0 },
+    { key: 'enrolled', label: 'Суралцаж байгаа', count: courses.filter((course: any) => (course.progressPercent ?? 0) < 100).length },
+    { key: 'upcoming', label: 'Удахгүй нээгдэх', count: 0 },
+    { key: 'completed', label: 'Судалсан', count: courses.filter((course: any) => (course.progressPercent ?? 0) >= 100).length },
   ];
 
   return (
@@ -292,7 +302,7 @@ export default function CoursesPage() {
             <div className="min-w-0">
               <p className="text-xs font-bold text-slate-800 dark:text-white truncate">{user?.fullName || 'Хэрэглэгч'}</p>
               <p className="text-[10px] text-slate-400 truncate">
-                {user?.role === 'STUDENT' ? `Оюутан • ${user?.code || ''}` : user?.role}
+                {user?.roles?.includes('STUDENT') ? `Оюутан • ${user?.code || ''}` : user?.roles?.[0]}
               </p>
             </div>
           </div>
@@ -377,7 +387,7 @@ export default function CoursesPage() {
           <main className="flex-1 p-4 lg:p-6 space-y-6 overflow-y-auto min-w-0">
 
             {/* Admin/Manager ESIS Sync Panel */}
-            {(user?.role === 'MANAGER' || user?.role === 'ADMIN') && (
+            {(user?.roles?.includes('MANAGER') || user?.roles?.includes('ADMIN')) && (
               <div className="space-y-6">
                 <div className="bg-slate-900 text-white rounded-2xl p-6 border border-slate-800 shadow-xl relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-teal-500/10 rounded-full filter blur-3xl pointer-events-none" />
@@ -550,7 +560,7 @@ export default function CoursesPage() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {courses.map((course, idx) => {
-                  const progress = Math.floor(Math.random() * 60 + 30);
+                  const progress = course.progressPercent ?? 0;
                   const imgUrl = course.coverImage || courseImages[idx % courseImages.length];
 
                   return (
@@ -575,7 +585,7 @@ export default function CoursesPage() {
                             {course.title}
                           </h3>
                           <p className="text-[10px] text-slate-400 font-medium">
-                            Багш: {course.teacher?.fullName || 'Д.Тамирхүн'}
+                            Багш: {course.teachers?.[0]?.fullName || course.teacher?.fullName || 'Багш хуваарилагдаагүй'}
                           </p>
                         </div>
 
@@ -597,7 +607,7 @@ export default function CoursesPage() {
                         <div className="flex items-center gap-3 text-[9px] text-slate-400 font-semibold">
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
-                            Дараагийн хугацаа: 10-р сарын 16
+                            Серверийн progress-тэй синк хийгдсэн
                           </span>
                         </div>
 
@@ -676,7 +686,7 @@ export default function CoursesPage() {
             </div>
 
             {/* Gamification stats (for students) */}
-            {user?.role === 'STUDENT' && (
+            {user?.roles?.includes('STUDENT') && (
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
                 <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                   <Activity className="w-3.5 h-3.5 text-orange-500" />

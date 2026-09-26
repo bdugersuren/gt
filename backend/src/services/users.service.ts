@@ -1,8 +1,9 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { validateMongolianRegisterNumber } from '../utils/validation.util';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { ManageUserDto } from '../users/dto/manage-user.dto';
 
 @Injectable()
 export class UsersService {
@@ -185,9 +186,12 @@ export class UsersService {
         classGroupId = cg.id;
       }
 
-      // 7. Write to database
+      // 7. Write normalized profile data to database
       try {
         const passwordHash = await bcrypt.hash(temporaryPassword, 10);
+        const company = role === Role.ENTERPRISE_MENTOR && companyName
+          ? (await this.prisma.company.findFirst({ where: { name: companyName } })) || await this.prisma.company.create({ data: { name: companyName } })
+          : null;
         await this.prisma.user.create({
           data: {
             username,
@@ -198,9 +202,15 @@ export class UsersService {
             roles: [role],
             registerNumber,
             phone,
-            companyName,
-            departmentId,
-            classGroupId,
+            staffProfile: ([Role.TEACHER, Role.ADMIN, Role.MANAGER] as Role[]).includes(role) ? { create: { departmentId } } : undefined,
+            studentProfile: role === Role.STUDENT ? {
+              create: {
+                status: 'ACTIVE',
+                enrollmentYear: new Date().getFullYear(),
+                classMemberships: classGroupId ? { create: { classGroupId, startDate: new Date(), isCurrent: true } } : undefined,
+              },
+            } : undefined,
+            enterpriseMentorProfile: company ? { create: { companyId: company.id } } : undefined,
           },
         });
         importedCount++;
@@ -236,17 +246,7 @@ export class UsersService {
   async getCompetencyProfile(userId: string) {
     const enrollments = await this.prisma.enrollment.findMany({
       where: { studentId: userId },
-      include: {
-        course: {
-          include: {
-            modules: {
-              include: {
-                lessons: true,
-              },
-            },
-          },
-        },
-      },
+      include: { standaloneCourse: { include: { modules: { include: { lessons: true } } } }, curriculumItem: { include: { course: { include: { modules: { include: { lessons: true } } } } } } },
     });
 
     const progressLogs = await this.prisma.progressLog.findMany({
@@ -257,7 +257,7 @@ export class UsersService {
     });
 
     const chartData = enrollments.map((enr) => {
-      const course = enr.course;
+      const course = (enr.standaloneCourse || enr.curriculumItem?.course)!;
       const totalLessons = course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
       
       const completedLessons = progressLogs.filter((log) => {
@@ -321,7 +321,7 @@ export class UsersService {
 
       const totalQuizzes = student.quizAttempts.length;
       const averageQuizScore = totalQuizzes > 0 
-        ? student.quizAttempts.reduce((sum, qa) => sum + qa.score, 0) / totalQuizzes 
+        ? student.quizAttempts.reduce((sum, qa) => sum + (qa.score ?? 0), 0) / totalQuizzes 
         : 0;
 
       if (totalQuizzes === 0) {
@@ -364,12 +364,123 @@ export class UsersService {
         email: true,
         code: true,
         roles: true,
-        department: { select: { name: true, code: true } },
+        staffProfile: { include: { department: { select: { name: true, code: true } } } },
       },
     });
   }
 
+  async findAllManaged() {
+    return this.prisma.user.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true, username: true, email: true, fullName: true, code: true, registerNumber: true, phone: true, roles: true, createdAt: true,
+        staffProfile: { select: { department: { select: { id: true, name: true, code: true } } } },
+        studentProfile: { select: { status: true, enrollmentYear: true } },
+        enterpriseMentorProfile: { select: { jobTitle: true, company: { select: { id: true, name: true } } } },
+      },
+    });
+  }
+
+  private async resolveCompany(data: ManageUserDto, tx: any) {
+    if (!data.companyId && !data.companyName) throw new BadRequestException('Enterprise mentor-д компани сонгоно уу');
+    if (data.companyId) {
+      const company = await tx.company.findUnique({ where: { id: data.companyId } });
+      if (!company) throw new NotFoundException('Сонгосон компани олдсонгүй');
+      return company;
+    }
+    return tx.company.findFirst({ where: { name: data.companyName } }) || tx.company.create({ data: { name: data.companyName } });
+  }
+
+  async createManaged(data: ManageUserDto) {
+    if (!data.roles?.length) throw new BadRequestException('Хэрэглэгчийн role заавал сонгоно уу');
+    if (!data.password) throw new BadRequestException('Шинэ хэрэглэгчийн нууц үг заавал байна');
+    const duplicate = await this.prisma.user.findFirst({ where: { OR: [{ username: data.username }, { email: data.email }, { code: data.code }, ...(data.registerNumber ? [{ registerNumber: data.registerNumber }] : [])] } });
+    if (duplicate) throw new ConflictException('Username, email, code эсвэл регистрийн дугаар давхардаж байна');
+    const department = data.departmentId ? await this.prisma.department.findUnique({ where: { id: data.departmentId } }) : null;
+    if (data.departmentId && !department) throw new NotFoundException('Сонгосон тэнхим олдсонгүй');
+    const company = data.roles.includes(Role.ENTERPRISE_MENTOR) ? await this.resolveCompany(data, this.prisma) : null;
+    const passwordHash = await bcrypt.hash(data.password, 10);
+    try {
+      const user = await this.prisma.user.create({ data: { username: data.username.trim(), email: data.email.trim().toLowerCase(), fullName: data.fullName.trim(), code: data.code.trim().toUpperCase(), registerNumber: data.registerNumber || null, phone: data.phone || null, passwordHash, roles: data.roles, staffProfile: data.roles.some((role) => ([Role.ADMIN, Role.MANAGER, Role.TEACHER] as Role[]).includes(role)) ? { create: { departmentId: data.departmentId || null } } : undefined, studentProfile: data.roles.includes(Role.STUDENT) ? { create: { enrollmentYear: data.enrollmentYear || new Date().getFullYear() } } : undefined, enterpriseMentorProfile: company ? { create: { companyId: company.id } } : undefined }, select: { id: true } });
+      return this.findManagedById(user.id);
+    } catch (error: any) { throw new ConflictException(`Хэрэглэгч үүсгэхэд алдаа гарлаа: ${error.message}`); }
+  }
+
+  async findManagedById(id: string) {
+    const user = await this.prisma.user.findUnique({ where: { id }, select: { id: true, username: true, email: true, fullName: true, code: true, registerNumber: true, phone: true, roles: true, createdAt: true, staffProfile: { select: { department: { select: { id: true, name: true, code: true } } } }, studentProfile: { select: { status: true, enrollmentYear: true } }, enterpriseMentorProfile: { select: { jobTitle: true, company: { select: { id: true, name: true } } } } } });
+    if (!user) throw new NotFoundException('Хэрэглэгч олдсонгүй');
+    return user;
+  }
+
+  async updateManaged(id: string, data: ManageUserDto) {
+    const current = await this.prisma.user.findUnique({ where: { id } });
+    if (!current) throw new NotFoundException('Хэрэглэгч олдсонгүй');
+    const duplicate = await this.prisma.user.findFirst({ where: { OR: [{ username: data.username }, { email: data.email }, { code: data.code }, ...(data.registerNumber ? [{ registerNumber: data.registerNumber }] : [])], NOT: { id } } });
+    if (duplicate) throw new ConflictException('Username, email, code эсвэл регистрийн дугаар давхардаж байна');
+    const company = data.roles.includes(Role.ENTERPRISE_MENTOR) ? await this.resolveCompany(data, this.prisma) : null;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id }, data: { username: data.username.trim(), email: data.email.trim().toLowerCase(), fullName: data.fullName.trim(), code: data.code.trim().toUpperCase(), registerNumber: data.registerNumber || null, phone: data.phone || null, roles: data.roles, ...(data.password ? { passwordHash: await bcrypt.hash(data.password, 10) } : {}) } });
+      const staff = data.roles.some((role) => ([Role.ADMIN, Role.MANAGER, Role.TEACHER] as Role[]).includes(role));
+      if (staff) await tx.staffProfile.upsert({ where: { userId: id }, update: { departmentId: data.departmentId || null }, create: { userId: id, departmentId: data.departmentId || null } }); else await tx.staffProfile.deleteMany({ where: { userId: id } });
+      if (data.roles.includes(Role.STUDENT)) await tx.studentProfile.upsert({ where: { userId: id }, update: { enrollmentYear: data.enrollmentYear }, create: { userId: id, enrollmentYear: data.enrollmentYear || new Date().getFullYear() } }); else await tx.studentProfile.deleteMany({ where: { userId: id } });
+      if (company) await tx.enterpriseMentorProfile.upsert({ where: { userId: id }, update: { companyId: company.id }, create: { userId: id, companyId: company.id } }); else await tx.enterpriseMentorProfile.deleteMany({ where: { userId: id } });
+    });
+    return this.findManagedById(id);
+  }
+
+  async deleteManaged(id: string, executorId: string) {
+    if (id === executorId) throw new BadRequestException('Өөрийн admin хэрэглэгчийг устгах боломжгүй');
+    const user = await this.prisma.user.findUnique({ where: { id }, select: { id: true, username: true } });
+    if (!user) throw new NotFoundException('Хэрэглэгч олдсонгүй');
+    try { await this.prisma.user.delete({ where: { id } }); return { deleted: true, id, username: user.username }; }
+    catch (error: any) { throw new ConflictException('Хэрэглэгчтэй холбоотой өгөгдөл байгаа тул устгах боломжгүй. Архивлах эсвэл role-ийг өөрчилнө үү.'); }
+  }
+
   // Get users by role
+  async findTeacherStudents(teacherId: string) {
+    const profiles = await this.prisma.studentProfile.findMany({
+      where: {
+        enrollments: {
+          some: {
+            OR: [
+              { standaloneCourse: { teachers: { some: { teacherId } } } },
+              { curriculumItem: { course: { teachers: { some: { teacherId } } } } },
+            ],
+          },
+        },
+      },
+      orderBy: { user: { fullName: 'asc' } },
+      include: {
+        user: { select: { id: true, fullName: true, email: true, code: true, registerNumber: true, phone: true } },
+        classMemberships: { where: { isCurrent: true }, include: { classGroup: { select: { id: true, name: true, code: true } } } },
+        enrollments: {
+          include: {
+            standaloneCourse: { select: { id: true, title: true, code: true } },
+            curriculumItem: { include: { course: { select: { id: true, title: true, code: true } } } },
+          },
+          orderBy: { updatedAt: 'desc' },
+        },
+      },
+    });
+    return profiles.map((profile) => {
+      const courses = new Map<string, { id: string; title: string; code: string; statuses: string[] }>();
+      for (const enrollment of profile.enrollments) {
+        const course = enrollment.standaloneCourse || enrollment.curriculumItem?.course;
+        if (!course) continue;
+        const current = courses.get(course.id) || { ...course, statuses: [] };
+        if (!current.statuses.includes(enrollment.status)) current.statuses.push(enrollment.status);
+        courses.set(course.id, current);
+      }
+      return {
+        ...profile.user,
+        status: profile.status,
+        enrollmentYear: profile.enrollmentYear,
+        classes: profile.classMemberships.map((membership) => membership.classGroup),
+        courses: Array.from(courses.values()),
+      };
+    });
+  }
+
   async findUsersByRole(role: Role) {
     return this.prisma.user.findMany({
       where: {

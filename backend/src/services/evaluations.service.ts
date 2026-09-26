@@ -103,16 +103,13 @@ export class EvaluationsService {
       return tx.submission.update({
         where: { id: submissionId },
         data: {
-          score: finalPercentageScore,
+          finalScore: finalPercentageScore,
           cbtResult: data.cbtResult,
           feedback: data.feedback,
         },
         include: {
-          rubricScores: {
-            include: {
-              criteria: true,
-            },
-          },
+          rubricScores: { include: { criteria: true } },
+          assets: { include: { asset: true } },
         },
       });
     });
@@ -128,7 +125,7 @@ export class EvaluationsService {
               module: {
                 course: {
                   teachers: {
-                    some: { id: userId },
+                    some: { teacherId: userId },
                   },
                 },
               },
@@ -148,11 +145,8 @@ export class EvaluationsService {
               },
             },
           },
-          rubricScores: {
-            include: {
-              criteria: true,
-            },
-          },
+          rubricScores: { include: { criteria: true } },
+          assets: { include: { asset: true } },
         },
         orderBy: { submittedAt: 'desc' },
       });
@@ -172,14 +166,124 @@ export class EvaluationsService {
               },
             },
           },
-          rubricScores: {
-            include: {
-              criteria: true,
-            },
-          },
+          rubricScores: { include: { criteria: true } },
+          assets: { include: { asset: true } },
         },
         orderBy: { submittedAt: 'desc' },
       });
     }
   }
+
+  async getTeacherGrades(teacherId: string) {
+    const submissions = await this.prisma.submission.findMany({
+      where: {
+        assignment: {
+          lesson: {
+            module: {
+              course: { teachers: { some: { teacherId } } },
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        finalScore: true,
+        cbtResult: true,
+        feedback: true,
+        submittedAt: true,
+        updatedAt: true,
+        linkUrl: true,
+        student: { select: { id: true, fullName: true, code: true, email: true } },
+        assignment: {
+          select: {
+            id: true,
+            title: true,
+            dueDate: true,
+            lesson: {
+              select: {
+                title: true,
+                module: { select: { course: { select: { id: true, code: true, title: true } } } },
+              },
+            },
+          },
+        },
+        assets: { select: { asset: { select: { id: true, publicUrl: true, originalName: true } } } },
+      },
+      orderBy: { submittedAt: 'desc' },
+    });
+
+    return submissions.map((submission) => ({
+      id: submission.id,
+      score: submission.finalScore,
+      finalScore: submission.finalScore,
+      cbtResult: submission.cbtResult,
+      feedback: submission.feedback,
+      submittedAt: submission.submittedAt,
+      updatedAt: submission.updatedAt,
+      linkUrl: submission.linkUrl,
+      student: submission.student,
+      assignment: {
+        id: submission.assignment.id,
+        title: submission.assignment.title,
+        dueDate: submission.assignment.dueDate,
+        lessonTitle: submission.assignment.lesson.title,
+      },
+      course: submission.assignment.lesson.module.course,
+      assets: submission.assets,
+    }));
+  }
+
+
+  async createSubmission(studentId: string, data: { assignmentId: string; linkUrl?: string; assetId?: string }) {
+    if (!data.linkUrl?.trim() && !data.assetId) {
+      throw new BadRequestException('Холбоос эсвэл файл заавал хавсаргана уу');
+    }
+    const assignment: any = await this.prisma.assignment.findUnique({
+      where: { id: data.assignmentId },
+      select: { id: true, lesson: { select: { module: { select: { courseId: true } } } } },
+    });
+    if (!assignment) throw new NotFoundException('Даалгавар олдсонгүй');
+    const enrollment = await this.prisma.enrollment.findFirst({
+      where: {
+        studentId,
+        status: 'ACTIVE',
+        startDate: { lte: new Date() },
+        OR: [{ endDate: null }, { endDate: { gte: new Date() } }],
+        AND: [{ OR: [{ standaloneCourseId: assignment.lesson.module.courseId }, { curriculumItem: { courseId: assignment.lesson.module.courseId } }] }],
+      },
+    });
+    if (!enrollment) throw new BadRequestException('Та энэ курст идэвхтэй бүртгэлгүй байна');
+    if (data.assetId) {
+      const asset = await this.prisma.mediaAsset.findUnique({ where: { id: data.assetId }, select: { id: true } });
+      if (!asset) throw new NotFoundException('Хавсаргасан файл олдсонгүй');
+    }
+    return this.prisma.submission.create({
+      data: {
+        studentId,
+        assignmentId: data.assignmentId,
+        type: data.assetId ? 'FILE' : 'LINK',
+        linkUrl: data.linkUrl?.trim() || null,
+        assets: data.assetId ? { create: { assetId: data.assetId } } : undefined,
+      },
+      include: { assignment: { select: { id: true, title: true } }, assets: { include: { asset: true } } },
+    });
+  }
+
+  async getMySubmissions(studentId: string) {
+    return this.prisma.submission.findMany({
+      where: { studentId },
+      include: { assignment: { select: { id: true, title: true, lesson: { select: { module: { select: { courseId: true } } } } } }, assets: { include: { asset: true } } },
+      orderBy: { submittedAt: 'desc' },
+    });
+  }
+
+  async getMySubmission(id: string, studentId: string) {
+    const submission = await this.prisma.submission.findFirst({
+      where: { id, studentId },
+      include: { assignment: { include: { rubrics: { include: { criteria: true } } } }, rubricScores: { include: { criteria: true } }, assets: { include: { asset: true } } },
+    });
+    if (!submission) throw new NotFoundException('Таны submission олдсонгүй');
+    return submission;
+  }
+
 }

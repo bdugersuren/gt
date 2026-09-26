@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { DepartmentsService } from '../services/departments.service';
 import { CreateDepartmentDto } from '../departments/dto/create-department.dto';
+import { UpdateDepartmentDto } from '../departments/dto/update-department.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -28,5 +29,22 @@ export class DepartmentsController {
   @Roles(Role.ADMIN, Role.MANAGER)
   async create(@Body() createDeptDto: CreateDepartmentDto) {
     return this.departmentsService.create(createDeptDto);
+  }
+  @Patch(':id')
+  @Roles(Role.ADMIN, Role.MANAGER)
+  async update(@Param('id') id: string, @Body() dto: UpdateDepartmentDto) {
+    return this.departmentsService.update(id, dto);
+  }
+
+  @Patch(':id/archive')
+  @Roles(Role.ADMIN, Role.MANAGER)
+  async archive(@Param('id') id: string) {
+    return this.departmentsService.archive(id);
+  }
+
+  @Delete(':id')
+  @Roles(Role.ADMIN, Role.MANAGER)
+  async remove(@Param('id') id: string) {
+    return this.departmentsService.remove(id);
   }
 }

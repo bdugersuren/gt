@@ -83,16 +83,13 @@ export default function LessonPlayerPage() {
 
         // Fetch existing submission for the first assignment if present
         if (data.assignments && data.assignments.length > 0) {
-          const userStr = localStorage.getItem('user');
-          if (userStr) {
-            const user = JSON.parse(userStr);
-            // Search submissions for this student and assignment
-            // In a real app, calls GET /api/submissions
-            // We can fetch or mock/localstore it
-            const localSubs = localStorage.getItem(`submission_${data.assignments[0].id}_${user.id}`);
-            if (localSubs) {
-              setExistingSubmission(JSON.parse(localSubs));
-            }
+          const submissionsResponse = await fetch(apiUrl + '/submissions/mine', {
+            headers: { 'Authorization': 'Bearer ' + token },
+          });
+          if (submissionsResponse.ok) {
+            const submissions = await submissionsResponse.json();
+            const latest = submissions.find((submission: any) => submission.assignmentId === data.assignments[0].id);
+            if (latest) setExistingSubmission(latest);
           }
         }
       } catch (err: any) {
@@ -109,14 +106,6 @@ export default function LessonPlayerPage() {
     if (typeof window === 'undefined' || !lesson) return;
     const token = localStorage.getItem('token');
     
-    // Simulate/write completion to localStorage for instant DAG UI updates
-    const savedCompletions = localStorage.getItem('completed_lessons');
-    let completions = savedCompletions ? JSON.parse(savedCompletions) : [];
-    if (!completions.includes(lesson.id)) {
-      completions.push(lesson.id);
-      localStorage.setItem('completed_lessons', JSON.stringify(completions));
-    }
-
     // Call API (will also work offline since OfflineSyncProvider caches it)
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
     try {
@@ -128,7 +117,8 @@ export default function LessonPlayerPage() {
         },
       });
     } catch (err) {
-      console.warn('Офлайн горимд хичээл дуусгалт хадгалагдлаа');
+      setError('Хичээл дуусгах хүсэлт амжилтгүй боллоо');
+      return;
     }
 
     const courseId = lesson.module?.courseId || '';
@@ -141,44 +131,28 @@ export default function LessonPlayerPage() {
     setSubmissionSuccess('');
 
     const token = localStorage.getItem('token');
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-
-    const submissionData = {
-      id: Math.random().toString(36).substring(7),
-      assignmentId,
-      studentId: user.id,
-      type: 'PRACTICAL_VIDEO',
-      fileUrl: submissionFile,
-      cbtResult: 'NOT_EVALUATED',
-      score: null,
-      feedback: null,
-      submittedAt: new Date().toISOString(),
-    };
-
-    // Save locally
-    localStorage.setItem(`submission_${assignmentId}_${user.id}`, JSON.stringify(submissionData));
-    setExistingSubmission(submissionData);
-    setSubmissionSuccess('Таны даалгаврыг амжилттай хүлээн авлаа. Багш/Ментор шалгаж үнэлсний дараа дүн харагдах болно.');
-    setSubmitting(false);
-
-    // Call API if online
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
     try {
-      await fetch(`${apiUrl}/submissions`, {
+      const response = await fetch(API_URL + '/submissions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': 'Bearer ' + token,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          assignmentId,
-          type: 'PRACTICAL_VIDEO',
-          fileUrl: submissionFile,
-        }),
+        body: JSON.stringify({ assignmentId, linkUrl: submissionFile }),
       });
-    } catch (err) {
-      // Sync queue if offline (handled via Dexie.js or Zustand sync queue)
-      console.warn('Сүлжээгүй тул дараалалд орлоо.');
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.message || 'Даалгавар илгээхэд алдаа гарлаа');
+      }
+      const saved = await response.json();
+      setExistingSubmission(saved);
+      setSubmissionSuccess('Таны даалгаврыг амжилттай хүлээн авлаа. Багш/Ментор шалгаж үнэлсний дараа дүн харагдана.');
+    } catch (err: any) {
+      setSubmissionSuccess('');
+      setError(err.message || 'Даалгавар илгээхэд алдаа гарлаа');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -313,7 +287,7 @@ export default function LessonPlayerPage() {
                         <span className="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider inline-block">
                           Илгээсэн
                         </span>
-                        <p className="text-[11px] text-slate-500">Илгээсэн файл: {existingSubmission.fileUrl}</p>
+                        <p className="text-[11px] text-slate-500">Илгээсэн файл: {(existingSubmission.assets?.[0]?.asset?.publicUrl || existingSubmission.linkUrl)}</p>
                         {existingSubmission.score !== null ? (
                           <div className="p-2 bg-emerald-100/50 dark:bg-emerald-900/30 rounded-lg text-left">
                             <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Үнэлгээ: {existingSubmission.cbtResult} ({existingSubmission.score} оноо)</p>

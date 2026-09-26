@@ -9,6 +9,8 @@ import { Role } from '@prisma/client';
 import { AuditLogInterceptor } from '../middlewares/audit-log.interceptor';
 import { AuditLogAction } from '../auth/decorators/audit-log.decorator';
 import { UserExcelImportService } from '../services/user-excel-import.service';
+import { ManageUserDto, UpdateManagedUserDto } from '../users/dto/manage-user.dto';
+import { Delete, Patch } from '@nestjs/common';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -79,10 +81,32 @@ export class UsersController {
     return this.usersService.getDropoutRisks();
   }
 
+  @Get('manage')
+  @Roles(Role.ADMIN)
+  async manageList() { return this.usersService.findAllManaged(); }
+
+  @Post('manage')
+  @Roles(Role.ADMIN)
+  async manageCreate(@Body() dto: ManageUserDto) { return this.usersService.createManaged(dto); }
+
+  @Patch('manage/:id')
+  @Roles(Role.ADMIN)
+  async manageUpdate(@Param('id') id: string, @Body() dto: UpdateManagedUserDto) { return this.usersService.updateManaged(id, dto); }
+
+  @Delete('manage/:id')
+  @Roles(Role.ADMIN)
+  async manageDelete(@Param('id') id: string, @Request() req: any) { return this.usersService.deleteManaged(id, req.user.id); }
+
   @Get()
   @Roles(Role.ADMIN, Role.MANAGER)
   async findAll() {
     return this.usersService.findAll();
+  }
+
+  @Get('teacher/students')
+  @Roles(Role.ADMIN, Role.MANAGER, Role.TEACHER)
+  async teacherStudents(@Request() req: any) {
+    return this.usersService.findTeacherStudents(req.user.id);
   }
 
   @Get('role/:role')

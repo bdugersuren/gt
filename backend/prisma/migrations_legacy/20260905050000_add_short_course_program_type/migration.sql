@@ -1,0 +1,4 @@
+CREATE TYPE "ProgramType" AS ENUM ('STANDARD', 'SHORT_COURSE');
+
+ALTER TABLE "Program"
+  ADD COLUMN "programType" "ProgramType" NOT NULL DEFAULT 'STANDARD';

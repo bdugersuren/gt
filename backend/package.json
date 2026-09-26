@@ -15,7 +15,10 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "ts-node prisma/seed.ts",
+    "prisma:audit": "ts-node prisma/preflight-audit.ts",
+    "prisma:cleanup:readiness": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f prisma/cleanup-readiness.sql",
+    "prisma:cleanup:deploy": "PGOPTIONS=\"-c app.allow_schema_cleanup=true\" prisma migrate deploy"
   },
   "dependencies": {
     "@nestjs/bullmq": "^10.1.1",
@@ -55,6 +58,7 @@
     "@types/passport-jwt": "^4.0.1",
     "prettier": "^3.2.5",
     "prisma": "^5.14.0",
+    "prisma-erd-generator": "^3.2.1",
     "source-map-support": "^0.5.21",
     "ts-loader": "^9.5.1",
     "ts-node": "^10.9.2",
