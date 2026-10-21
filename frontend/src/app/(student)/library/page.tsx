@@ -9,7 +9,7 @@ export default function StudentLibraryPage() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
 
   const load = async () => {
     const token = localStorage.getItem('token');

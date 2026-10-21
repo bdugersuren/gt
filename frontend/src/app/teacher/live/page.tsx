@@ -25,7 +25,7 @@ export default function TeacherLiveDashboard() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
   const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
   const loadData = async () => {

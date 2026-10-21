@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Database, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react';
 
 type Field = { name: string; type: string }; type TableInfo = { name: string; readOnly: boolean; fields: Field[] }; type Result = { rows: Record<string, unknown>[]; total: number; page: number; totalPages: number; readOnly: boolean };
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API = process.env.NEXT_PUBLIC_API_URL || '/api';
 async function request(path: string, init: RequestInit = {}) { const res = await fetch(`${API}${path}`, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}`, ...init.headers } }); const body = await res.json().catch(() => null); if (!res.ok) throw new Error(Array.isArray(body?.message) ? body.message[0] : body?.message || 'Үйлдэл амжилтгүй боллоо'); return body; }
 
 export default function DatabasePage() {

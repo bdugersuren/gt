@@ -22,7 +22,7 @@ export default function TeacherCoursesList() {
 
     const token = localStorage.getItem('token');
     const fetchCourses = async () => {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
       try {
         const response = await fetch(`${apiUrl}/courses`, {
           headers: { 

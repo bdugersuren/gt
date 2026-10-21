@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, AlertCircle, FileText, ClipboardCheck, ArrowRight, HelpCircle } from 'lucide-react';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
+import HlsPlayer from '@/components/HlsPlayer';
 
 interface Assignment {
   id: string;
@@ -66,7 +67,7 @@ export default function LessonPlayerPage() {
     }
 
     const fetchLessonDetails = async () => {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
       try {
         const response = await fetch(`${apiUrl}/lessons/${lessonId}`, {
           headers: {
@@ -107,7 +108,7 @@ export default function LessonPlayerPage() {
     const token = localStorage.getItem('token');
     
     // Call API (will also work offline since OfflineSyncProvider caches it)
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
     try {
       await fetch(`${apiUrl}/lessons/${lesson.id}/complete`, {
         method: 'POST',
@@ -131,7 +132,7 @@ export default function LessonPlayerPage() {
     setSubmissionSuccess('');
 
     const token = localStorage.getItem('token');
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
     try {
       const response = await fetch(API_URL + '/submissions', {
         method: 'POST',
@@ -192,18 +193,12 @@ export default function LessonPlayerPage() {
       <main className="flex-1 max-w-4xl mx-auto w-full py-12 px-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column: Lesson Player */}
         <div className="lg:col-span-2 space-y-8">
-          {/* Mock Video player if HLS is present */}
+          {/* HLS Adaptive Video Player */}
           {lesson.videoUrl && (
-            <div className="bg-black aspect-video rounded-3xl overflow-hidden relative shadow-lg group">
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-900/60 z-10">
-                <p className="text-white text-xs font-bold uppercase tracking-widest px-4 py-2 border border-white/20 rounded-xl bg-black/40">
-                  HLS Adaptive Video Streaming Active (.m3u8)
-                </p>
-              </div>
-              <video
+            <div className="rounded-3xl overflow-hidden shadow-lg border border-slate-200 dark:border-slate-800">
+              <HlsPlayer
                 src={lesson.videoUrl}
-                controls
-                className="w-full h-full object-cover"
+                title={lesson.title}
                 poster="https://images.unsplash.com/photo-1588072432836-e10032774350?q=80&w=800"
               />
             </div>

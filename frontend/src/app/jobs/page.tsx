@@ -32,7 +32,7 @@ export default function JobsPage() {
     }
 
     const fetchJobs = async () => {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
       try {
         const response = await fetch(`${apiUrl}/career/match-jobs`, {
           headers: {

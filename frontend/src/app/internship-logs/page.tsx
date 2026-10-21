@@ -38,7 +38,7 @@ export default function InternshipLogsPage() {
   const fetchLogs = async () => {
     if (typeof window === 'undefined') return;
     const token = localStorage.getItem('token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
 
     try {
       const response = await fetch(`${apiUrl}/internship-logs`, {
@@ -78,7 +78,7 @@ export default function InternshipLogsPage() {
     e.preventDefault();
     if (typeof window === 'undefined') return;
     const token = localStorage.getItem('token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
 
     try {
       const response = await fetch(`${apiUrl}/internship-logs`, {
@@ -112,7 +112,7 @@ export default function InternshipLogsPage() {
   const handleReviewLog = async (logId: string, isApproved: boolean) => {
     if (typeof window === 'undefined') return;
     const token = localStorage.getItem('token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
 
     try {
       const response = await fetch(`${apiUrl}/internship-logs/${logId}/review`, {

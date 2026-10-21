@@ -50,7 +50,7 @@ export default function LibraryManagementPage({ role }: { role: 'ADMIN' | 'MANAG
   const [modalOpen, setModalOpen] = useState(false);
   const [message, setMessage] = useState('');
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
   const headers = { Authorization: 'Bearer ' + token };
 

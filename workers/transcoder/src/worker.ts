@@ -46,43 +46,66 @@ const worker = new Worker(
       console.log(`[Job ${job.id}] Downloading raw video from MinIO: ${inputBucket}/${inputKey}...`);
       await minioClient.fGetObject(inputBucket, inputKey, localInputPath);
 
-      // 3. Transcode raw video to HLS (720p, mobile-friendly encoding)
-      console.log(`[Job ${job.id}] Starting FFmpeg transcoding...`);
-      await new Promise<void>((resolve, reject) => {
-        ffmpeg(localInputPath)
-          .outputOptions([
-            '-profile:v main',
-            '-vf scale=-2:720', // Scale height to 720p, automatically calculate width keeping aspect ratio (divisible by 2)
-            '-c:a aac',
-            '-ar 48000',
-            '-b:a 128k',
-            '-c:v h264',
-            '-pix_fmt yuv420p',
-            '-crf 23',
-            '-maxrate 1500k',
-            '-bufsize 3000k',
-            '-hls_time 6', // Split segments every 6 seconds
-            '-hls_playlist_type vod',
-            '-hls_segment_filename', path.join(localOutputDir, 'segment_%03d.ts')
-          ])
-          .output(path.join(localOutputDir, 'index.m3u8'))
-          .on('start', (cmd) => {
-            console.log(`[Job ${job.id}] Spawned FFmpeg command:`, cmd);
-          })
-          .on('progress', (progress) => {
-            // Update BullMQ progress percentage
-            job.updateProgress(Math.floor(progress.percent || 0));
-          })
-          .on('end', () => {
-            console.log(`[Job ${job.id}] FFmpeg transcoding finished successfully.`);
-            resolve();
-          })
-          .on('error', (err) => {
-            console.error(`[Job ${job.id}] FFmpeg error:`, err);
-            reject(err);
-          })
-          .run();
-      });
+      // 3. Transcode raw video to Adaptive Multi-Bitrate HLS (360p, 480p, 720p)
+      console.log(`[Job ${job.id}] Starting Adaptive Multi-Bitrate FFmpeg transcoding...`);
+
+      const profiles = [
+        { name: '360p', height: 360, vBitrate: '400k', maxRate: '500k', bufSize: '1000k', aBitrate: '64k', bandwidth: 464000, width: 640 },
+        { name: '480p', height: 480, vBitrate: '800k', maxRate: '1000k', bufSize: '2000k', aBitrate: '96k', bandwidth: 896000, width: 854 },
+        { name: '720p', height: 720, vBitrate: '1500k', maxRate: '1800k', bufSize: '3000k', aBitrate: '128k', bandwidth: 1628000, width: 1280 },
+      ];
+
+      for (let i = 0; i < profiles.length; i++) {
+        const p = profiles[i];
+        console.log(`[Job ${job.id}] Encoding profile ${p.name} (${i + 1}/${profiles.length})...`);
+        await new Promise<void>((resolve, reject) => {
+          ffmpeg(localInputPath)
+            .outputOptions([
+              '-profile:v main',
+              `-vf scale=-2:${p.height}`,
+              '-c:a aac',
+              '-ar 48000',
+              `-b:a ${p.aBitrate}`,
+              '-c:v h264',
+              '-pix_fmt yuv420p',
+              '-crf 23',
+              `-b:v ${p.vBitrate}`,
+              `-maxrate ${p.maxRate}`,
+              `-bufsize ${p.bufSize}`,
+              '-hls_time 6',
+              '-hls_playlist_type vod',
+              '-hls_segment_filename', path.join(localOutputDir, `${p.name}_%03d.ts`),
+            ])
+            .output(path.join(localOutputDir, `${p.name}.m3u8`))
+            .on('progress', (progress) => {
+              const base = Math.floor((i / profiles.length) * 100);
+              const slice = Math.floor(((progress.percent || 0) / profiles.length));
+              job.updateProgress(Math.min(99, base + slice));
+            })
+            .on('end', () => {
+              console.log(`[Job ${job.id}] Profile ${p.name} finished successfully.`);
+              resolve();
+            })
+            .on('error', (err) => {
+              console.error(`[Job ${job.id}] Profile ${p.name} error:`, err);
+              reject(err);
+            })
+            .run();
+        });
+      }
+
+      // Generate Master Playlist index.m3u8 pointing to the variants
+      const masterPlaylistContent = [
+        '#EXTM3U',
+        '#EXT-X-VERSION:3',
+        ...profiles.flatMap((p) => [
+          `#EXT-X-STREAM-INF:BANDWIDTH=${p.bandwidth},RESOLUTION=${p.width}x${p.height},NAME="${p.name}"`,
+          `${p.name}.m3u8`,
+        ]),
+      ].join('\n');
+
+      fs.writeFileSync(path.join(localOutputDir, 'index.m3u8'), masterPlaylistContent);
+      console.log(`[Job ${job.id}] Master playlist index.m3u8 created successfully.`);
 
       // 4. Upload HLS output files (.m3u8 and .ts files) back to MinIO
       console.log(`[Job ${job.id}] Uploading HLS segments to MinIO output path: ${outputBucket}/${outputKeyPrefix}...`);

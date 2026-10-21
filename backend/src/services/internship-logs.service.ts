@@ -52,6 +52,26 @@ export class InternshipLogsService {
       whereClause.studentId = query.studentId;
     }
 
+    // Enterprise mentors are restricted to their company's interns
+    if (
+      currentUser.roles.includes(Role.ENTERPRISE_MENTOR) &&
+      !currentUser.roles.includes(Role.ADMIN) &&
+      !currentUser.roles.includes(Role.MANAGER)
+    ) {
+      const mentorProfile = await this.prisma.enterpriseMentorProfile.findUnique({
+        where: { userId: currentUser.id },
+      });
+      if (mentorProfile) {
+        whereClause.OR = [
+          { mentorId: currentUser.id },
+          { mentor: { enterpriseMentorProfile: { companyId: mentorProfile.companyId } } },
+          { mentorId: null },
+        ];
+      } else {
+        whereClause.mentorId = currentUser.id;
+      }
+    }
+
     return this.prisma.internshipLog.findMany({
       where: whereClause,
       include: {

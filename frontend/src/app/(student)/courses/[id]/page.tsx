@@ -92,7 +92,7 @@ export default function CourseDetailsPage() {
     setUser(JSON.parse(userData));
 
     const fetchCourseDetails = async () => {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
       try {
         const response = await fetch(`${apiUrl}/courses/${courseId}`, {
           headers: { 'Authorization': `Bearer ${token}` },
@@ -172,7 +172,7 @@ export default function CourseDetailsPage() {
     const token = localStorage.getItem('token');
     if (!token) return;
     setGradesLoading(true);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
     try {
       const res = await fetch(`${apiUrl}/courses/${courseId}/student-grades`, {
         headers: {
@@ -196,7 +196,7 @@ export default function CourseDetailsPage() {
     const token = localStorage.getItem('token');
     if (!token) return;
     setChatLoading(true);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
     try {
       const res = await fetch(`${apiUrl}/messages/conversation/${contactId}?courseId=${courseId}`, {
         headers: {
@@ -219,7 +219,7 @@ export default function CourseDetailsPage() {
   const fetchChatContacts = async () => {
     const token = localStorage.getItem('token');
     if (!token) return;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
     try {
       const res = await fetch(`${apiUrl}/messages/contacts?courseId=${courseId}`, {
         headers: {
@@ -246,7 +246,7 @@ export default function CourseDetailsPage() {
     if (!messageText.trim() || !activeContact) return;
     const token = localStorage.getItem('token');
     if (!token) return;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
     try {
       const res = await fetch(`${apiUrl}/messages`, {
         method: 'POST',
@@ -284,7 +284,7 @@ export default function CourseDetailsPage() {
   useEffect(() => {
     if (activeLesson) {
       const token = localStorage.getItem('token');
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
       if (!token) return;
       Promise.all([
         fetch(API_URL + '/lessons/' + activeLesson.id + '/notes', { headers: { 'Authorization': 'Bearer ' + token } }),
@@ -307,7 +307,7 @@ export default function CourseDetailsPage() {
   const saveNotes = async () => {
     if (!activeLesson) return;
     const token = localStorage.getItem('token');
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
     const response = await fetch(API_URL + '/lessons/' + activeLesson.id + '/notes', {
       method: 'PUT',
       headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
@@ -387,7 +387,7 @@ export default function CourseDetailsPage() {
   const handleCompleteLesson = async () => {
     if (!activeLesson || !course) return;
     const token = localStorage.getItem('token');
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
     const response = await fetch(API_URL + '/lessons/' + activeLesson.id + '/complete', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },

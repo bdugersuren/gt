@@ -45,7 +45,7 @@ export default function MentorDashboard() {
     setCompanyName(parsedUser.companyName || 'ААН');
 
     setLoading(true);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
 
     try {
       // 1. Fetch internship logs
@@ -80,7 +80,7 @@ export default function MentorDashboard() {
   const fetchChatContacts = async () => {
     const token = localStorage.getItem('token');
     if (!token) return;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
     try {
       const res = await fetch(`${apiUrl}/messages/contacts`, {
         headers: {
@@ -105,7 +105,7 @@ export default function MentorDashboard() {
     const token = localStorage.getItem('token');
     if (!token) return;
     setChatLoading(true);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
     try {
       const res = await fetch(`${apiUrl}/messages/conversation/${contactId}?r=1`, {
         headers: {
@@ -128,7 +128,7 @@ export default function MentorDashboard() {
     if (!messageText.trim() || !activeContact) return;
     const token = localStorage.getItem('token');
     if (!token) return;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
     try {
       const res = await fetch(`${apiUrl}/messages`, {
         method: 'POST',
@@ -158,7 +158,7 @@ export default function MentorDashboard() {
     if (!reviewingLog) return;
 
     const token = localStorage.getItem('token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
 
     try {
       const res = await fetch(`${apiUrl}/internship-logs/${reviewingLog.id}/review`, {

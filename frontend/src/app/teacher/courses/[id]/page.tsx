@@ -75,7 +75,7 @@ export default function TeacherCourseEditor() {
   const params = useParams();
   const courseId = params.id as string;
   const router = useRouter();
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
 
   // ── Core States ──
   const [course, setCourse] = useState<CourseDetails | null>(null);
@@ -1619,7 +1619,7 @@ export default function TeacherCourseEditor() {
             </div>
 
             {/* Course media summary panel */}
-            <CourseMediaList courseId={courseId} apiUrl={process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'} />
+            <CourseMediaList courseId={courseId} apiUrl={process.env.NEXT_PUBLIC_API_URL || '/api'} />
           </div>
         </div>
       )}

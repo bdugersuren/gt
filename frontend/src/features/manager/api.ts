@@ -56,7 +56,7 @@ export class ManagerApiError extends Error {
   }
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 function getMessage(payload: unknown, fallback: string): { message: string; details: string[] } {
   if (!payload || typeof payload !== 'object') return { message: fallback, details: [] };

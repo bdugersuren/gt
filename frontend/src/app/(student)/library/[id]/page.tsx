@@ -13,7 +13,7 @@ export default function StudentLibraryBookPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [downloadBusy, setDownloadBusy] = useState(false);
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
 
   useEffect(() => {
     const token = localStorage.getItem('token');

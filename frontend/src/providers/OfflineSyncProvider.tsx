@@ -51,7 +51,7 @@ export default function OfflineSyncProvider({ children }: OfflineSyncProviderPro
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
 
     for (const item of queueItems) {
       try {

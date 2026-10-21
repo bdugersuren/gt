@@ -46,7 +46,7 @@ export default function TeacherDashboard() {
     setTeacherName(parsedUser.fullName || 'Багш');
 
     setLoading(true);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
 
     try {
       // 1. Fetch courses
@@ -92,7 +92,7 @@ export default function TeacherDashboard() {
   const fetchChatContacts = async () => {
     const token = localStorage.getItem('token');
     if (!token) return;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
     try {
       // Teachers can chat with students/colleagues in any of their courses. We pass first courseId or empty
       const courseQuery = courses.length > 0 ? `?courseId=${courses[0].id}` : '';
@@ -119,7 +119,7 @@ export default function TeacherDashboard() {
     const token = localStorage.getItem('token');
     if (!token) return;
     setChatLoading(true);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
     try {
       const courseQuery = courses.length > 0 ? `&courseId=${courses[0].id}` : '';
       const res = await fetch(`${apiUrl}/messages/conversation/${contactId}?r=1${courseQuery}`, {
@@ -143,7 +143,7 @@ export default function TeacherDashboard() {
     if (!messageText.trim() || !activeContact) return;
     const token = localStorage.getItem('token');
     if (!token) return;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
     try {
       const res = await fetch(`${apiUrl}/messages`, {
         method: 'POST',
@@ -192,7 +192,7 @@ export default function TeacherDashboard() {
     if (!gradingSubmission) return;
 
     const token = localStorage.getItem('token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
 
     const scoresPayload = Object.keys(criteriaScores).map((critId) => ({
       criteriaId: critId,

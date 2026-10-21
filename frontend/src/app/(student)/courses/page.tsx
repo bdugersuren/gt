@@ -135,7 +135,7 @@ export default function CoursesPage() {
     const parsedUser = JSON.parse(userData);
     setUser(parsedUser);
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
 
     const fetchData = async () => {
       try {
@@ -197,14 +197,14 @@ export default function CoursesPage() {
     setSyncMessage('');
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/esis/sync`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/esis/sync`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
       });
       const data = await response.json();
       if (data.success) {
         setSyncMessage(`Синк амжилттай! (${data.recordsCount} суралцагч)`);
-        const dropoutRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/users/students/dropout-risk`, {
+        const dropoutRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/users/students/dropout-risk`, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
         if (dropoutRes.ok) {

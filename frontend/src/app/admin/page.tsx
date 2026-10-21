@@ -31,7 +31,7 @@ export default function AdminDashboard() {
     if (!token) return;
 
     setLoading(true);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
 
     try {
       // Fetch audit logs
@@ -59,7 +59,7 @@ export default function AdminDashboard() {
     if (!selectedFile) return;
 
     const token = localStorage.getItem('token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
 
     setImportLoading(true);
     setImportResult(null);

@@ -31,7 +31,7 @@ export default function PublicPortfolioPage() {
     if (!code) return;
 
     const fetchPortfolio = async () => {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
       try {
         const response = await fetch(`${apiUrl}/career/portfolio/${code}`);
         if (response.ok) {

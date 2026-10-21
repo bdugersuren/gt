@@ -44,7 +44,7 @@ export default function QuizAttemptPage() {
     }
 
     const fetchQuizDetails = async () => {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
       try {
         const response = await fetch(`${apiUrl}/quizzes/${quizId}`, {
           headers: {
@@ -97,7 +97,7 @@ export default function QuizAttemptPage() {
     setSubmitting(true);
 
     const token = localStorage.getItem('token');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
 
     try {
       const response = await fetch(`${apiUrl}/quizzes/${quiz.id}/attempt`, {

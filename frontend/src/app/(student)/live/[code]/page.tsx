@@ -38,9 +38,9 @@ export default function StudentLiveSession() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
   const getWSUrl = () => {
-    const api = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const api = process.env.NEXT_PUBLIC_API_URL || '/api';
     return api.replace('/api', '/live');
   };
   const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('token') : null;

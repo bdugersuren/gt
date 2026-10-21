@@ -151,8 +151,26 @@ export class EvaluationsService {
         orderBy: { submittedAt: 'desc' },
       });
     } else {
-      // ENTERPRISE_MENTOR: returns submissions of students they mentor (or all for demo/simplicity)
+      // ENTERPRISE_MENTOR: returns submissions of students assigned to mentor or mentor's company
+      const mentorProfile = await this.prisma.enterpriseMentorProfile.findUnique({
+        where: { userId },
+      });
+      const relevantLogs = await this.prisma.internshipLog.findMany({
+        where: mentorProfile
+          ? {
+              OR: [
+                { mentorId: userId },
+                { mentor: { enterpriseMentorProfile: { companyId: mentorProfile.companyId } } },
+              ],
+            }
+          : { mentorId: userId },
+        select: { studentId: true },
+        distinct: ['studentId'],
+      });
+      const studentIds = relevantLogs.map((log) => log.studentId);
+
       return this.prisma.submission.findMany({
+        where: studentIds.length > 0 ? { studentId: { in: studentIds } } : { id: 'none' },
         include: {
           student: {
             select: { id: true, fullName: true, code: true },
